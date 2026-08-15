@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SimFlation v64</title>
+  <title>SimFlation v65</title>
   <style>
     :root{
       --bg:#eff4fb;--bg2:#f8fbff;--panel:#ffffff;--panel-2:#fbfdff;--text:#162133;--muted:#66748a;--border:#d7dfeb;
@@ -490,7 +490,7 @@
 <main>
   <div class="top">
     <div>
-      <h1>SimFlation</h1><span class="edition-badge">v64</span>
+      <h1>SimFlation</h1><span class="edition-badge">v65</span>
       <p class="sub">Explore how people, firms, government, political systems and catastrophic shocks interact month by month from August 2026.</p>
     </div>
     <div id="runStatus" class="status">Paused. Press Run to begin.</div>
@@ -3520,7 +3520,8 @@ function updateTrade(){const exports=sum(Object.values(trade.exports)),imports=s
   if (globalThis.__SIMFLATION_V59_POLITICS__) return;
   globalThis.__SIMFLATION_V59_POLITICS__ = true;
 
-  const V59_TARGET_VOTERS_PER_MP = 10;
+  const V59_DEFAULT_VOTERS_PER_MP = 10;
+  const v65TargetVotersPerMP = () => clamp(Math.round(Number(politics?.constitution?.votersPerMP || V59_DEFAULT_VOTERS_PER_MP)), 2, 100);
   const V59_CENSUS_MONTHS = 20 * 12;
   const V59_LOCALITY_LABELS = {
     cornwall: 'Cornwall', london: 'London', yorkshire: 'Yorkshire', north: 'North',
@@ -3542,15 +3543,31 @@ function updateTrade(){const exports=sum(Object.values(trade.exports)),imports=s
   const v58ApplyConstitutionalReform = applyConstitutionalReform;
   const v58ImposeMilitaryDictatorship = imposeMilitaryDictatorship;
 
+  let v65EligibleVoterCache = {index:-1, peopleRef:null, population:-1, list:[]};
+  let v65ConstituencyElectorateCache = {index:-1, system:null, population:-1, counts:new Map()};
   function v59EligibleVoters() {
-    return people.filter(person => person.ageMonths >= 18 * 12);
+    if (v65EligibleVoterCache.index !== monthIndex || v65EligibleVoterCache.peopleRef !== people || v65EligibleVoterCache.population !== people.length) {
+      v65EligibleVoterCache = {index:monthIndex, peopleRef:people, population:people.length, list:people.filter(person => person.ageMonths >= 18 * 12)};
+    }
+    return v65EligibleVoterCache.list;
+  }
+  function v65ConstituencyElectorates(system) {
+    if (v65ConstituencyElectorateCache.index !== monthIndex || v65ConstituencyElectorateCache.system !== system || v65ConstituencyElectorateCache.population !== people.length) {
+      const counts = new Map();
+      for (const person of v59EligibleVoters()) {
+        const id = householdOfPerson(person)?.constituencyId;
+        if (id) counts.set(id, (counts.get(id) || 0) + 1);
+      }
+      v65ConstituencyElectorateCache = {index:monthIndex, system, population:people.length, counts};
+    }
+    return v65ConstituencyElectorateCache.counts;
   }
 
   function v59CurrentSeatTarget() {
     const system = politics?.constituencySystem;
     if (system?.seatCount) return system.seatCount;
     const voters = v59EligibleVoters().length;
-    return Math.max(1, Math.round(voters / V59_TARGET_VOTERS_PER_MP));
+    return Math.max(1, Math.round(voters / v65TargetVotersPerMP()));
   }
 
   function v59CurrentParliamentSize() {
@@ -3676,7 +3693,7 @@ function updateTrade(){const exports=sum(Object.values(trade.exports)),imports=s
       regionVoters[region] = (regionVoters[region] || 0) + 1;
     }
     const nonEmptyRegions = Object.keys(regionVoters).filter(region => regionVoters[region] > 0);
-    let seatCount = Math.max(1, Math.round(voters.length / V59_TARGET_VOTERS_PER_MP));
+    let seatCount = Math.max(1, Math.round(voters.length / v65TargetVotersPerMP()));
     seatCount = Math.max(seatCount, nonEmptyRegions.length);
     const regionSeats = v59Apportion(regionVoters, seatCount, true);
     const previousSystem = politics.constituencySystem;
@@ -3698,12 +3715,12 @@ function updateTrade(){const exports=sum(Object.values(trade.exports)),imports=s
       date: date().label,
       electorate: voters.length,
       seatCount,
-      targetVotersPerMP: V59_TARGET_VOTERS_PER_MP,
+      targetVotersPerMP: v65TargetVotersPerMP(),
       regionSeats: {...actualRegionSeats}
     };
     censusHistory.push(censusRecord);
     politics.constituencySystem = {
-      targetVotersPerMP: V59_TARGET_VOTERS_PER_MP,
+      targetVotersPerMP: v65TargetVotersPerMP(),
       censusMonths: V59_CENSUS_MONTHS,
       lastCensusIndex: monthIndex,
       nextCensusIndex: monthIndex + V59_CENSUS_MONTHS,
@@ -3722,7 +3739,7 @@ function updateTrade(){const exports=sum(Object.values(trade.exports)),imports=s
         type: 'census', date: date().label, index: monthIndex,
         government: 'Census and boundary review', primeMinister: politics.primeMinister,
         seats: {...politics.seats},
-        detail: `The twenty-year census counted ${voters.length} eligible voters. The next Commons will contain ${seatCount} constituencies, ${seatCount > oldCount ? 'up' : seatCount < oldCount ? 'down' : 'unchanged'} from ${oldCount}, targeting about ${V59_TARGET_VOTERS_PER_MP} voters per MP.`
+        detail: `The twenty-year census counted ${voters.length} eligible voters. The next Commons will contain ${seatCount} constituencies, ${seatCount > oldCount ? 'up' : seatCount < oldCount ? 'down' : 'unchanged'} from ${oldCount}, targeting about ${v65TargetVotersPerMP()} voters per MP.`
       });
     }
     return politics.constituencySystem;
@@ -3749,7 +3766,8 @@ function updateTrade(){const exports=sum(Object.values(trade.exports)),imports=s
     if (!choices.length) choices = system.constituencies.filter(c => c.region === region);
     if (!choices.length) choices = system.constituencies;
     if (!choices.length) return null;
-    const currentElectorate = c => v59EligibleVoters().filter(p => householdOfPerson(p)?.constituencyId === c.id).length;
+    const electorateCounts = v65ConstituencyElectorates(system);
+    const currentElectorate = c => electorateCounts.get(c.id) || 0;
     constituency = choices.slice().sort((a,b) => currentElectorate(a) - currentElectorate(b) || a.id.localeCompare(b.id))[0];
     h.constituencyId = constituency.id;
     if (!constituency.householdIds.includes(h.id)) constituency.householdIds.push(h.id);
@@ -4184,7 +4202,7 @@ function updateTrade(){const exports=sum(Object.values(trade.exports)),imports=s
     }
     const executiveText = rulingMonarchy ? `${politics.primeMinister} remains Sovereign and continues to exercise executive authority. The election changes the legislature only.` : presidential ? `${politics.president.name} is President. ${politics.primeMinister} is Prime Minister, heading ${politicalParties[formation.lead]?.label || formation.lead}'s parliamentary government.${politics.president.party !== formation.lead ? ' The presidency and parliamentary government are controlled by different parties.' : ''}` : `${politics.primeMinister} becomes ${headOfGovernmentOffice()}.`;
     const boundary = v59EnsureBoundarySystem();
-    $('electionModalContent').innerHTML = `<span class="eyebrow">Election result</span><h2 id="electionResultTitle">${pending.date} ${presidential ? 'presidential and general' : 'general'} election</h2>${presidentialHtml}<h3>Legislative election</h3><div class="parliament-bar">${seatBarHtml(seats)}</div><div class="politics-legend">${seatLegendHtml(seats)}</div><table class="election-result-table"><thead><tr><th>Party</th><th>Votes</th><th>Share</th><th>Seats</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table><div class="election-government"><b>${gov}</b><div>${executiveText} ${result.turnoutVotes} of ${result.electorate} eligible voters voted, turnout ${result.turnout.toFixed(1)}%. ${boundary.seatCount} MPs represent an electorate of ${result.electorate}, with boundaries targeting about ${V59_TARGET_VOTERS_PER_MP} voters per MP. Electoral system: ${politics.constitution.electoralSystem.toUpperCase()}.</div></div><div class="election-actions"><button id="continueElectionButton" class="primary" type="button">Continue simulation</button></div>`;
+    $('electionModalContent').innerHTML = `<span class="eyebrow">Election result</span><h2 id="electionResultTitle">${pending.date} ${presidential ? 'presidential and general' : 'general'} election</h2>${presidentialHtml}<h3>Legislative election</h3><div class="parliament-bar">${seatBarHtml(seats)}</div><div class="politics-legend">${seatLegendHtml(seats)}</div><table class="election-result-table"><thead><tr><th>Party</th><th>Votes</th><th>Share</th><th>Seats</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table><div class="election-government"><b>${gov}</b><div>${executiveText} ${result.turnoutVotes} of ${result.electorate} eligible voters voted, turnout ${result.turnout.toFixed(1)}%. ${boundary.seatCount} MPs represent an electorate of ${result.electorate}, with boundaries targeting about ${v65TargetVotersPerMP()} voters per MP. Electoral system: ${politics.constitution.electoralSystem.toUpperCase()}.</div></div><div class="election-actions"><button id="continueElectionButton" class="primary" type="button">Continue simulation</button></div>`;
     $('continueElectionButton').addEventListener('click', continueAfterElection); renderPolitics(history.at(-1)); return true;
   }
 
@@ -4220,7 +4238,7 @@ function updateTrade(){const exports=sum(Object.values(trade.exports)),imports=s
     if ($('constitutionalSummary')) {
       const currentSize = sum(Object.values(politics.seats || {}));
       const remaining = Math.max(0, (system.nextCensusIndex || monthIndex) - monthIndex);
-      $('constitutionalSummary').innerHTML = `<div class="politics-history-item"><div><div class="date">Representation</div><div class="detail">Population-linked Commons</div></div><div><div class="result">${currentSize} MPs · ${v59EligibleVoters().length} eligible voters</div><div class="detail">Boundary target about ${V59_TARGET_VOTERS_PER_MP} voters per MP · next census in ${tenureText(remaining)}</div></div></div>` + $('constitutionalSummary').innerHTML;
+      $('constitutionalSummary').innerHTML = `<div class="politics-history-item"><div><div class="date">Representation</div><div class="detail">Population-linked Commons</div></div><div><div class="result">${currentSize} MPs · ${v59EligibleVoters().length} eligible voters</div><div class="detail">Boundary target about ${v65TargetVotersPerMP()} voters per MP · next census in ${tenureText(remaining)}</div></div></div>` + $('constitutionalSummary').innerHTML;
     }
     return out;
   };
@@ -4302,6 +4320,15 @@ function updateTrade(){const exports=sum(Object.values(trade.exports)),imports=s
     return out;
   };
 
+  globalThis.__simflationV65RunCensus = function(initial=false) {
+    const system = v59RunCensus(initial);
+    if (!initial && system) {
+      politics.seats = v59ScaleSeatMap(politics.seats || {}, system.seatCount);
+      politics.currentParliamentSeatCount = system.seatCount;
+    }
+    return system;
+  };
+
   // Upgrade the already-initialised page immediately. Future resets use the wrapper above.
   if (politics && people.length) {
     v59RunCensus(true);
@@ -4351,8 +4378,11 @@ const v59RenderPoliticsForV60 = renderPolitics;
 
   function v60ManagedUplift(perf, salt = 'legislative') {
     const success = v60EconomicSuccess(perf);
-    const jitter = (keyedUnit(`managed-uplift-${salt}`, monthIndex, 0) - .5) * .04;
-    return clamp(.80 - success * .40 + jitter, .40, .80);
+    const level = politics?.constitution?.managedElectionLevel || 'standard';
+    const bands = {light:[.12,.28],standard:[.40,.80],heavy:[.85,1.35],extreme:[1.35,2.20]};
+    const [lo,hi] = bands[level] || bands.standard;
+    const jitter = (keyedUnit(`managed-uplift-${salt}`, monthIndex, 0) - .5) * Math.min(.08, (hi-lo)*.18);
+    return clamp(hi - success * (hi-lo) + jitter, lo, hi);
   }
 
   function v60BoostShares(shares, protectedParty, perf, salt = 'presidential') {
@@ -4658,7 +4688,7 @@ function v60GovernmentTermNumber(previousLead, newLead) {
       ? `<div class="election-government"><b>Managed-election advantage</b><div>The governing party received a ${(managedAdvantage.uplift * 100).toFixed(0)}% target uplift relative to its underlying support. Its recorded share moved from ${managedAdvantage.baseShare.toFixed(1)}% to ${managedAdvantage.actualShare.toFixed(1)}%, with ${managedAdvantage.flipped} ballots reassigned. Victory was not guaranteed.</div></div>`
       : '';
     const boundary = v59EnsureBoundarySystem();
-    $('electionModalContent').innerHTML = `<span class="eyebrow">Election result</span><h2 id="electionResultTitle">${pending.date} general election</h2>${managedText}<h3>Legislative election</h3><div class="parliament-bar">${seatBarHtml(seats)}</div><div class="politics-legend">${seatLegendHtml(seats)}</div><table class="election-result-table"><thead><tr><th>Party</th><th>Votes</th><th>Share</th><th>Seats</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table><div class="election-government"><b>${gov}</b><div>${executiveText} ${result.turnoutVotes} of ${result.electorate} eligible voters voted, turnout ${result.turnout.toFixed(1)}%. ${boundary.seatCount} MPs represent an electorate of ${result.electorate}, with boundaries targeting about ${V59_TARGET_VOTERS_PER_MP} voters per MP. Electoral system: ${politics.constitution.electoralSystem.toUpperCase()}.</div></div><div class="election-actions"><button id="continueElectionButton" class="primary" type="button">Continue simulation</button></div>`;
+    $('electionModalContent').innerHTML = `<span class="eyebrow">Election result</span><h2 id="electionResultTitle">${pending.date} general election</h2>${managedText}<h3>Legislative election</h3><div class="parliament-bar">${seatBarHtml(seats)}</div><div class="politics-legend">${seatLegendHtml(seats)}</div><table class="election-result-table"><thead><tr><th>Party</th><th>Votes</th><th>Share</th><th>Seats</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table><div class="election-government"><b>${gov}</b><div>${executiveText} ${result.turnoutVotes} of ${result.electorate} eligible voters voted, turnout ${result.turnout.toFixed(1)}%. ${boundary.seatCount} MPs represent an electorate of ${result.electorate}, with boundaries targeting about ${v65TargetVotersPerMP()} voters per MP. Electoral system: ${politics.constitution.electoralSystem.toUpperCase()}.</div></div><div class="election-actions"><button id="continueElectionButton" class="primary" type="button">Continue simulation</button></div>`;
     $('continueElectionButton').addEventListener('click', continueAfterElection); renderPolitics(history.at(-1)); return true;
   }
 
@@ -5138,6 +5168,329 @@ reset = function(...args) {
     }
   };
 })();
+/* SimFlation v65 politics-system upgrade. */
+(() => {
+  'use strict';
+  if (globalThis.__SIMFLATION_V65_POLITICS__) return;
+  globalThis.__SIMFLATION_V65_POLITICS__ = true;
+
+  const DEFAULT_VOTERS_PER_MP = 10;
+  const DEFAULT_SECOND_CHAMBER_SIZE = 60;
+  const DEFAULT_MANAGED_LEVEL = 'standard';
+  const v64MakeLeader = makeLeader;
+  const v64UpdatePoliticalMonth = updatePoliticalMonth;
+  const v64RenderPolitics = renderPolitics;
+  const v64Reset = reset;
+  const v64SimulateElectionCore = simulateElectionCore;
+  const v64CollectRunChecks = collectRunChecks;
+
+  function v65Constitution() {
+    if (!politics?.constitution) return null;
+    const c = politics.constitution;
+    if (!Number.isFinite(Number(c.votersPerMP))) c.votersPerMP = DEFAULT_VOTERS_PER_MP;
+    c.votersPerMP = clamp(Math.round(Number(c.votersPerMP) || DEFAULT_VOTERS_PER_MP), 2, 100);
+    if (!Number.isFinite(Number(c.secondChamberSize))) c.secondChamberSize = DEFAULT_SECOND_CHAMBER_SIZE;
+    c.secondChamberSize = clamp(Math.round(Number(c.secondChamberSize) || DEFAULT_SECOND_CHAMBER_SIZE), 10, 300);
+    if (!['light','standard','heavy','extreme'].includes(c.managedElectionLevel)) c.managedElectionLevel = DEFAULT_MANAGED_LEVEL;
+    return c;
+  }
+
+  function v65LeaderStartingAge(party, serial, name) {
+    if (name === 'Andy Burnham') return 56;
+    const a = politicalStaticUnit('v65-leader-age-'+party, serial, 31);
+    const b = politicalStaticUnit('v65-leader-age-'+party, serial, 32);
+    return Math.round(36 + ((a + b) / 2) * 31);
+  }
+  function v65LeaderRetirementAge(party, serial) {
+    return Math.round(64 + politicalStaticUnit('v65-leader-retire-'+party, serial, 33) * 12);
+  }
+  function v65LeaderMaxYears(party, serial) {
+    const a = politicalStaticUnit('v65-leader-tenure-'+party, serial, 34);
+    return 4 + Math.floor(a * 11);
+  }
+  function v65EnsureLeaderDemographics(leader, party = 'unknown') {
+    if (!leader) return leader;
+    const serial = Number(leader.v65Serial ?? Math.max(0, politics?.leaderHistory?.indexOf(leader) ?? 0));
+    leader.v65Serial = serial;
+    if (!Number.isFinite(leader.ageAtStart)) leader.ageAtStart = v65LeaderStartingAge(party, serial, leader.name);
+    if (!Number.isFinite(leader.birthIndex)) leader.birthIndex = leader.startIndex - Math.round(leader.ageAtStart * 12);
+    if (!Number.isFinite(leader.retirementAge)) leader.retirementAge = v65LeaderRetirementAge(party, serial);
+    leader.maxYears = clamp(Number(leader.maxYears) || v65LeaderMaxYears(party, serial), 4, 14);
+    return leader;
+  }
+  function v65LeaderAge(leader) {
+    if (!leader) return null;
+    v65EnsureLeaderDemographics(leader);
+    return Math.max(18, (monthIndex - leader.birthIndex) / 12);
+  }
+
+  makeLeader = function(party, name = null, reason = 'Leadership election') {
+    const leader = v64MakeLeader(party, name, reason);
+    const serial = Math.max(0, (politics?.leaderSerial || 1) - 1);
+    leader.v65Serial = serial;
+    leader.ageAtStart = v65LeaderStartingAge(party, serial, leader.name);
+    leader.birthIndex = monthIndex - Math.round(leader.ageAtStart * 12);
+    leader.retirementAge = v65LeaderRetirementAge(party, serial);
+    leader.maxYears = v65LeaderMaxYears(party, serial);
+    return leader;
+  };
+
+  function v65LeadershipAgeing() {
+    if (!politics?.leaders) return;
+    for (const party of leaderPartyKeys()) {
+      const leader = politics.leaders[party];
+      if (!leader || leader.endIndex !== null) continue;
+      v65EnsureLeaderDemographics(leader, party);
+      const age = v65LeaderAge(leader), tenure = leaderTenureMonths(leader) / 12;
+      const hardRetirement = age >= 82 || tenure >= Math.max(4, leader.maxYears || 10);
+      const overPreferredAge = Math.max(0, age - leader.retirementAge);
+      const retirementChance = overPreferredAge > 0 ? clamp(.025 + overPreferredAge * .012, .025, .22) : 0;
+      const ageExit = retirementChance > 0 && politicalStaticUnit('v65-leader-monthly-exit-'+party, monthIndex, Math.round(age * 12)) < retirementChance;
+      if (hardRetirement || ageExit) {
+        const reason = age >= 82 ? `Retired from the leadership at age ${Math.floor(age)}` : tenure >= (leader.maxYears || 10) ? `Leadership succession after ${Math.floor(tenure)} years` : `Retired from the leadership at age ${Math.floor(age)}`;
+        replacePartyLeader(party, reason, true);
+      }
+    }
+  }
+
+  function v65ElectionLevelLabel(level) {
+    return ({light:'Lightly managed',standard:'Managed',heavy:'Heavily managed',extreme:'Dominant-state'})[level] || 'Managed';
+  }
+
+  function v65AllocateChamberSeats(voteShares, size) {
+    const parties = activePartyKeys().filter(p => (voteShares?.[p] || 0) > 0);
+    const seats = Object.fromEntries(activePartyKeys().map(p => [p, 0]));
+    if (!parties.length || size <= 0) return seats;
+    for (let i = 0; i < size; i++) {
+      const winner = parties.slice().sort((a,b) => {
+        const qa = (voteShares[b] || 0) / ((seats[b] || 0) + 1);
+        const qb = (voteShares[a] || 0) / ((seats[a] || 0) + 1);
+        return qa - qb || (voteShares[b] || 0) - (voteShares[a] || 0) || a.localeCompare(b);
+      })[0];
+      seats[winner] = (seats[winner] || 0) + 1;
+    }
+    return seats;
+  }
+
+  function v65InitialSecondChamber(reason = 'Constitutional settlement') {
+    const c = v65Constitution();
+    if (!c || !politics) return null;
+    const type = c.secondChamber || 'lords', size = c.secondChamber === 'none' ? 0 : c.secondChamberSize;
+    const priorHistory = politics.secondChamberSystem?.history || [];
+    let seats = null;
+    if (type === 'elected') {
+      const support = politics.lastElectionVoteShares && sum(Object.values(politics.lastElectionVoteShares)) > 0 ? politics.lastElectionVoteShares : politics.partyPolling;
+      seats = v65AllocateChamberSeats(support || {}, size);
+    }
+    politics.secondChamberSystem = {
+      type, size, seats, lastElectionIndex:type === 'elected' ? monthIndex : null,
+      history:[...priorHistory, {index:monthIndex,date:date().label,type,size,seats:seats ? {...seats} : null,reason}]
+    };
+    return politics.secondChamberSystem;
+  }
+
+  function v65ElectSecondChamber(result) {
+    const c = v65Constitution();
+    if (!c || c.secondChamber !== 'elected' || !result || result.type !== 'election') return null;
+    const size = c.secondChamberSize;
+    const seats = v65AllocateChamberSeats(result.voteShares || result.underlyingVoteShares || politics.partyPolling || {}, size);
+    const system = politics.secondChamberSystem || {history:[]};
+    politics.secondChamberSystem = {
+      ...system, type:'elected', size, seats, lastElectionIndex:monthIndex,
+      history:[...(system.history || []), {index:monthIndex,date:result.date,type:'elected',size,seats:{...seats},reason:'Second-chamber election held alongside the general election'}]
+    };
+    result.secondChamberResult = {size,seats:{...seats},electionStatusAtCall:result.electionStatusAtCall || politics.constitution.elections};
+    return result.secondChamberResult;
+  }
+
+  function v65InstallUi() {
+    const panel = document.querySelector('.constitutional-control-panel');
+    const grid = panel?.querySelector('.constitution-grid');
+    if (grid && !$('constitutionVotersPerMP')) {
+      const holder = document.createElement('div');
+      holder.className = 'v65-constitution-extra';
+      holder.style.display = 'contents';
+      holder.innerHTML = `
+        <label>Voters per Commons MP<input id="constitutionVotersPerMP" type="number" min="2" max="100" step="1" value="${DEFAULT_VOTERS_PER_MP}"><small>Changing this immediately redraws Commons boundaries and changes the number of MPs.</small></label>
+        <label id="secondChamberSizeLabel">Second-chamber size<input id="constitutionSecondChamberSize" type="number" min="10" max="300" step="1" value="${DEFAULT_SECOND_CHAMBER_SIZE}"><small>Used for elected, appointed and hereditary chambers.</small></label>
+        <label id="managedElectionLevelLabel">Managed-election intensity<select id="constitutionManagedLevel"><option value="light">Light — modest incumbent advantage</option><option value="standard" selected>Standard — substantial advantage</option><option value="heavy">Heavy — major distortion</option><option value="extreme">Extreme — dominant-state advantage</option></select><small>Underlying voter support is retained separately from the official result.</small></label>`;
+      grid.appendChild(holder);
+    }
+    const politicsPanel = $('politics');
+    if (politicsPanel && !$('secondChamberPanel')) {
+      const anchor = $('politicsLegend');
+      const chamber = document.createElement('div');
+      chamber.id = 'secondChamberPanel';
+      chamber.className = 'government-card v65-second-chamber';
+      chamber.innerHTML = '<h3>Second chamber</h3><div id="secondChamberSummary" class="small">No second-chamber simulation yet.</div><div id="secondChamberBar" class="parliament-bar" aria-label="Second-chamber seats by party"></div><div id="secondChamberLegend" class="politics-legend"></div>';
+      anchor?.insertAdjacentElement('afterend', chamber);
+    }
+    if ($('partyLeadersGrid') && !$('leaderAgeSummary')) {
+      const summary = document.createElement('div');
+      summary.id = 'leaderAgeSummary';
+      summary.className = 'leader-grid';
+      $('partyLeadersGrid').insertAdjacentElement('beforebegin', summary);
+    }
+    if (!$('v65PoliticsStyle')) {
+      const style = document.createElement('style');
+      style.id = 'v65PoliticsStyle';
+      style.textContent = '.v65-second-chamber{margin-top:14px}.v65-leader-card{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2)}.v65-leader-card b{display:block;margin-bottom:3px}.v65-leader-card small{display:block;color:var(--muted)}.v65-constitution-extra label small{display:block;margin-top:4px;color:var(--muted);font-weight:400}.v65-constitution-extra input{width:100%;margin-top:5px}';
+      document.head.appendChild(style);
+    }
+    const managed = $('constitutionElections');
+    const chamberType = $('constitutionSecondChamber');
+    const syncVisibility = () => {
+      if ($('managedElectionLevelLabel')) $('managedElectionLevelLabel').hidden = managed?.value !== 'managed';
+      if ($('secondChamberSizeLabel')) $('secondChamberSizeLabel').hidden = chamberType?.value === 'none';
+    };
+    managed?.addEventListener('change', syncVisibility);
+    chamberType?.addEventListener('change', syncVisibility);
+    syncVisibility();
+  }
+
+  function v65SyncControls() {
+    v65InstallUi();
+    const c = v65Constitution(); if (!c) return;
+    if ($('constitutionVotersPerMP')) $('constitutionVotersPerMP').value = String(c.votersPerMP);
+    if ($('constitutionSecondChamberSize')) $('constitutionSecondChamberSize').value = String(c.secondChamberSize);
+    if ($('constitutionManagedLevel')) $('constitutionManagedLevel').value = c.managedElectionLevel;
+    if ($('managedElectionLevelLabel')) $('managedElectionLevelLabel').hidden = $('constitutionElections')?.value !== 'managed';
+    if ($('secondChamberSizeLabel')) $('secondChamberSizeLabel').hidden = $('constitutionSecondChamber')?.value === 'none';
+  }
+
+  function v65ApplyExtraConstitutionSettings() {
+    const c = v65Constitution(); if (!c) return;
+    const oldRatio = c.votersPerMP, oldType = politics.secondChamberSystem?.type, oldSize = politics.secondChamberSystem?.size;
+    c.votersPerMP = clamp(Math.round(Number($('constitutionVotersPerMP')?.value) || DEFAULT_VOTERS_PER_MP), 2, 100);
+    c.secondChamberSize = clamp(Math.round(Number($('constitutionSecondChamberSize')?.value) || DEFAULT_SECOND_CHAMBER_SIZE), 10, 300);
+    c.managedElectionLevel = ['light','standard','heavy','extreme'].includes($('constitutionManagedLevel')?.value) ? $('constitutionManagedLevel').value : DEFAULT_MANAGED_LEVEL;
+    if (c.votersPerMP !== oldRatio && typeof globalThis.__simflationV65RunCensus === 'function') globalThis.__simflationV65RunCensus(false);
+    if (c.secondChamber !== oldType || (c.secondChamber !== 'none' && c.secondChamberSize !== oldSize)) v65InitialSecondChamber('Constitutional reform');
+    v65RenderExtras();
+  }
+
+  function v65RenderExtras() {
+    v65SyncControls();
+    const c = v65Constitution(); if (!c || !politics) return;
+    const chamber = politics.secondChamberSystem || v65InitialSecondChamber('Initial settlement');
+    const electorate = politics.constituencySystem?.censusHistory?.at(-1)?.electorate || people.filter(p => p.ageMonths >= 18*12).length;
+    const commonsSeats = sum(Object.values(politics.seats || {}));
+    if ($('secondChamberSummary')) {
+      const typeLabel = ({lords:'House of Lords',appointed:'Appointed senate',elected:'Elected senate',hereditary:'Hereditary chamber',none:'No second chamber'})[c.secondChamber] || c.secondChamber;
+      const control = chamber?.seats ? Object.entries(chamber.seats).sort((a,b)=>b[1]-a[1])[0] : null;
+      const controlText = control && control[1] ? ` Largest party: ${politicalParties[control[0]]?.label || control[0]} with ${control[1]} of ${chamber.size} seats.` : '';
+      $('secondChamberSummary').textContent = `${typeLabel}${c.secondChamber === 'none' ? '.' : ` — ${c.secondChamberSize} members.`}${controlText} Commons: ${commonsSeats} MPs for about ${electorate} voters (${c.votersPerMP} voters per MP target).`;
+    }
+    if ($('secondChamberBar')) $('secondChamberBar').innerHTML = chamber?.seats ? seatBarHtml(chamber.seats) : '';
+    if ($('secondChamberLegend')) $('secondChamberLegend').innerHTML = chamber?.seats ? seatLegendHtml(chamber.seats) : '';
+    if ($('leaderAgeSummary')) {
+      $('leaderAgeSummary').innerHTML = leaderPartyKeys().map(p => {
+        const l = politics.leaders[p]; if (!l) return '';
+        v65EnsureLeaderDemographics(l,p);
+        const age = v65LeaderAge(l), tenure = leaderTenureMonths(l);
+        return `<div class="v65-leader-card"><b>${politicalParties[p]?.label || p}: ${l.name}</b><small>Age ${Math.floor(age)} · leader for ${tenureText(tenure)} · expected retirement age ${l.retirementAge} · tenure ceiling ${l.maxYears}y</small></div>`;
+      }).join('');
+    }
+    const status = $('constitutionStatus');
+    if (status && politics.constitution.elections === 'managed') status.textContent += ` Managed-election intensity: ${v65ElectionLevelLabel(c.managedElectionLevel)}.`;
+  }
+
+  renderPolitics = function(...args) {
+    const out = v64RenderPolitics(...args);
+    v65RenderExtras();
+    return out;
+  };
+
+  simulateElectionCore = function(...args) {
+    const before = politics?.electionHistory?.length || 0;
+    const out = v64SimulateElectionCore(...args);
+    if (out && (politics?.electionHistory?.length || 0) > before) {
+      const result = politics.electionHistory.at(-1);
+      const chamber = v65ElectSecondChamber(result);
+      if (chamber && $('electionModalContent')) {
+        const block = document.createElement('div');
+        block.className = 'election-government';
+        block.innerHTML = `<b>Elected second chamber</b><div>${chamber.size} seats were elected alongside the Commons.</div><div class="parliament-bar">${seatBarHtml(chamber.seats)}</div><div class="politics-legend">${seatLegendHtml(chamber.seats)}</div>`;
+        $('electionModalContent').querySelector('.election-actions')?.insertAdjacentElement('beforebegin', block);
+      }
+      v65RenderExtras();
+    }
+    return out;
+  };
+
+  updatePoliticalMonth = function(s, initial = false) {
+    const out = v64UpdatePoliticalMonth(s, initial);
+    v65Constitution();
+    for (const p of leaderPartyKeys()) v65EnsureLeaderDemographics(politics.leaders[p], p);
+    if (!initial) v65LeadershipAgeing();
+    return out;
+  };
+
+  reset = function(...args) {
+    const out = v64Reset(...args);
+    v65Constitution();
+    for (const p of leaderPartyKeys()) v65EnsureLeaderDemographics(politics.leaders[p], p);
+    v65InitialSecondChamber('Initial settlement');
+    v65SyncControls();
+    if (history.at(-1)) v65RenderExtras();
+    return out;
+  };
+
+  collectRunChecks = function() {
+    const problems = v64CollectRunChecks();
+    if (politics) {
+      const c = v65Constitution();
+      const system = politics.secondChamberSystem;
+      if (c?.secondChamber === 'elected') {
+        if (!system?.seats) problems.push('Elected second chamber has no seat allocation');
+        else if (sum(Object.values(system.seats)) !== c.secondChamberSize) problems.push('Elected second-chamber seats do not reconcile with its configured size');
+      }
+      for (const p of leaderPartyKeys()) {
+        const l = politics.leaders[p]; if (!l) continue;
+        v65EnsureLeaderDemographics(l,p);
+        const age = v65LeaderAge(l);
+        if (!Number.isFinite(age) || age < 25 || age > 90) problems.push('A party leader has an implausible age');
+        if ((l.maxYears || 0) > 14) problems.push('A party leader has an implausibly long tenure ceiling');
+      }
+    }
+    return [...new Set(problems)];
+  };
+
+  globalThis.__simflationV65Politics = {
+    state() {
+      const c = v65Constitution();
+      return {
+        votersPerMP:c?.votersPerMP,
+        managedElectionLevel:c?.managedElectionLevel,
+        commonsSeats:sum(Object.values(politics?.seats || {})),
+        electorate:politics?.constituencySystem?.censusHistory?.at(-1)?.electorate || 0,
+        secondChamber:politics?.secondChamberSystem ? JSON.parse(JSON.stringify(politics.secondChamberSystem)) : null,
+        leaders:Object.fromEntries(leaderPartyKeys().map(p => {const l=politics.leaders[p];v65EnsureLeaderDemographics(l,p);return[p,{name:l.name,age:v65LeaderAge(l),retirementAge:l.retirementAge,maxYears:l.maxYears,tenureMonths:leaderTenureMonths(l)}]}))
+      };
+    },
+    allocateSecondChamber:(shares,size)=>v65AllocateChamberSeats(shares,Math.round(size)),
+    applySettings(settings={}) {
+      const c=v65Constitution();
+      if(Number.isFinite(Number(settings.votersPerMP)))c.votersPerMP=clamp(Math.round(Number(settings.votersPerMP)),2,100);
+      if(Number.isFinite(Number(settings.secondChamberSize)))c.secondChamberSize=clamp(Math.round(Number(settings.secondChamberSize)),10,300);
+      if(settings.secondChamber)c.secondChamber=settings.secondChamber;
+      if(['light','standard','heavy','extreme'].includes(settings.managedElectionLevel))c.managedElectionLevel=settings.managedElectionLevel;
+      if(typeof globalThis.__simflationV65RunCensus==='function')globalThis.__simflationV65RunCensus(false);
+      v65InitialSecondChamber('Audit/API constitutional reform');
+      v65RenderExtras();
+      return this.state();
+    }
+  };
+
+  v65InstallUi();
+  $('applyConstitution')?.addEventListener('click', () => setTimeout(v65ApplyExtraConstitutionSettings, 0));
+  if (politics) {
+    v65Constitution();
+    for (const p of leaderPartyKeys()) v65EnsureLeaderDemographics(politics.leaders[p], p);
+    v65InitialSecondChamber('Initial settlement');
+    if (history.at(-1)) v65RenderExtras();
+  }
+})();
 /* SIMFLATION_V61_CALIBRATION_START */
 (() => {
   const V61 = {
@@ -5434,8 +5787,8 @@ reset = function(...args) {
 ;(()=>{
   const legacy=window.__simflationV62;
   if(!legacy)return;
-  window.__simflationV64={...legacy,version:'v64',releaseVersion:'64.0.0',modelVersion:'v64'};
-  window.__simflationCurrent=window.__simflationV64;
+  window.__simflationV65={...legacy,version:'v65',releaseVersion:'65.0.0',modelVersion:'v65'};
+  window.__simflationCurrent=window.__simflationV65;
 })();
 </script>
 
