@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SimFlation 0.8.0</title>
+  <title>SimFlation 0.9.0</title>
   <style>
     :root{
       --bg:#eff4fb;--bg2:#f8fbff;--panel:#ffffff;--panel-2:#fbfdff;--text:#162133;--muted:#66748a;--border:#d7dfeb;
@@ -490,7 +490,7 @@
 <main>
   <div class="top">
     <div>
-      <h1>SimFlation</h1><span class="edition-badge">0.8.0</span>
+      <h1>SimFlation</h1><span class="edition-badge">0.9.0</span>
       <p class="sub">Explore how people, firms, government, political systems and catastrophic shocks interact month by month from August 2026.</p>
     </div>
     <div id="runStatus" class="status">Paused. Press Run to begin.</div>
@@ -2336,7 +2336,7 @@ function resetFlows(){unmetSupply=sectorMap(0);unmetAffordability=sectorMap(0);t
   function labourMobility(){if(monthIndex%3!==0)return;const mobile=workingAgePeople().filter(p=>p.job!==null&&!p.publicDepartment),ordered=mobile.slice().sort((a,b)=>keyedUnit('job-mobility',a.id)-keyedUnit('job-mobility',b.id)),limit=Math.max(1,Math.ceil(mobile.length*.018));let moves=0;for(const p of ordered){if(moves>=limit)break;const current=firmById(p.job);if(!current||current.dormantMonths>0||current.workers.length<=sectors[current.sector].minStaff)continue;const currentPay=workerGrossWage(current,p),currentGap=(lastDemandGap[current.sector]||0)/Math.max(1,sectors[current.sector].baselineDemand),choices=firms.filter(f=>f!==current&&f.dormantMonths===0&&f.vacancies>0),best=choices.sort((a,b)=>jobMatchWeight(p,b)-jobMatchWeight(p,a))[0];if(!best)continue;const bestPay=workerGrossWage(best,p),bestGap=(lastDemandGap[best.sector]||0)/Math.max(1,sectors[best.sector].baselineDemand),match=Math.exp(-Math.abs((p.skillMultiplier||1)-(best.skillRequirement||1))*2.6),shortageMove=bestGap>currentGap+.28&&bestPay>=currentPay*.98;if(match<.30||(!shortageMove&&bestPay<currentPay*1.10))continue;if(transferWorker(p,current,best)){current.vacancies=Math.max(0,current.vacancies+1);best.vacancies=Math.max(0,best.vacancies-1);p.reservationWage=.94*p.reservationWage+.06*bestPay;moves++}}syncAllHouseholds()}
 
   function productivityDemandTransmission(){const productivity=clamp(productivityTrend(),.65,3.2),living=clamp((history.at(-1)?.realGDPPerCapitaIndex||100)/100,.65,2.4);return clamp(Math.pow(productivity,.68)*Math.pow(living,.10),.72,2.25)}
-  function labourMarket(){const minWage=indexedPolicy('minimumWage'),populationScale=people.length/Math.max(1,basePopulation),demandTransmission=productivityDemandTransmission(),monthlyInflation=history.at(-1)?.inflation==null?0:history.at(-1).inflation/1200,labourForce=workingAgePeople(),unemployedBefore=labourForce.filter(p=>p.job===null).length,serviceFirms=sectorFirms('services');allocateDepartmentJobs();const reserveTarget=totalGovernmentBaselineBudget()*Number($('cashReserveMonths').value),excessCash=Math.max(0,government.cash-reserveTarget),annualGDP=Math.max(1,history.at(-1)?.annualisedNominalGDP||baseRealGDP*12),debtLimit=Number($('stabiliserDebtLimit').value)/100,debtRoom=Math.max(0,annualGDP*debtLimit-government.debt),unemploymentPct=labourForce.length?unemployedBefore/labourForce.length*100:0,averageServiceWage=avg(serviceFirms.map(f=>f.wage))||minWage,jobBudget=Math.min(excessCash*.04+debtRoom/60+stabiliserFinancingRoom(unemploymentPct)*.65,corePublicServiceBudget()*.45),affordableJobs=Math.max(0,Math.floor(jobBudget/Math.max(1,v61PublicJobNetCost(averageServiceWage)))),desiredPublicJobs=Math.floor(Math.max(0,unemployedBefore-labourForce.length*.08)*Number($('publicJobs').value)/100),stabiliserTotal=$('fiscalRule').value==='automatic'?Math.min(desiredPublicJobs,affordableJobs):0;serviceFirms.forEach((f,i)=>{f.previousPublicJobSlots=f.publicJobSlots||0;f.stabiliserJobSlots=Math.floor(stabiliserTotal/Math.max(1,serviceFirms.length))+(i<stabiliserTotal%Math.max(1,serviceFirms.length)?1:0);f.publicJobSlots=(f.departmentJobSlots||0)+(f.stabiliserJobSlots||0)});for(const p of people){if(!p.labourParticipant||p.retired)continue;if(p.job===null){p.unemployedMonths=(p.unemployedMonths||0)+1;const searchAdjustment=.006+Math.min(.010,p.unemployedMonths*.00025);p.reservationWage=Math.max(minWage*.68,p.reservationWage*(1+monthlyInflation*.22-searchAdjustment))}else{p.unemployedMonths=0;const current=firmById(p.job);if(current)p.reservationWage=.95*p.reservationWage+.05*workerGrossWage(current,p)}}for(const f of firms){f.wage=Math.max(f.wage,minWage);if(f.dormantMonths>0){f.vacancies=0;while(f.workers.length){const p=personById(f.workers.pop());if(p){closeEmploymentSpell(p);p.job=null;p.publicDepartment=null}}continue}const c=sectors[f.sector],gapPerFirm=(lastDemandGap[f.sector]||0)/Math.max(1,sectorFirms(f.sector).length),structural=c.baselineDemand*populationScale*demandTransmission,response=firmAdjustmentResponse(f,gapPerFirm,structural),shortageTarget=Math.max(f.sales,f.demandEWMA||f.expectedSales)+gapPerFirm*response*.45,normalTarget=.68*(f.demandEWMA||f.expectedSales)+.20*structural+.12*Math.max(f.sales,structural*.55),inventoryPenalty=f.sector==='services'?0:Math.max(0,f.stock-Math.max(f.demandEWMA||f.expectedSales,structural)*.72)*.12,targetOutput=Math.max(c.baselineDemand*.18,normalTarget,shortageTarget)-inventoryPenalty,workerCapacity=Math.max(.3,f.productivity*outputMultiplier(f.sector));let rawWanted=Math.ceil(Math.max(0,targetOutput)/workerCapacity)+(f.publicJobSlots||0);if(gapPerFirm>workerCapacity*.55)rawWanted+=1;const desiredStaff=clamp(Math.max(c.minStaff,rawWanted),0,160);f.desiredStaff=desiredStaff;const publicCapacity=f.sector==='services'?Math.max(0,f.publicJobSlots||0):0,effectiveMax=(f.maxStaff||22)+publicCapacity;f.capacityConstrainedStaff=Math.max(0,desiredStaff-effectiveMax);let wanted=clamp(desiredStaff,0,effectiveMax);if(!Number.isFinite(f.staffTarget)||f.staffTarget<=0)f.staffTarget=f.workers.length;const staffingAdjustment=wanted<f.staffTarget*.70?.18:.12;f.staffTarget=clamp(f.staffTarget+(wanted-f.staffTarget)*staffingAdjustment,0,effectiveMax);const smoothedWanted=Math.round(f.staffTarget),recoveryHiringBoost=clamp(unemploymentPct/100-.08,0,.55),monthlyHireCapacity=Math.max(1,Math.ceil(Math.max(1,f.workers.length)*(.08+recoveryHiringBoost*.10)));f.vacancies=Math.min(monthlyHireCapacity,Math.max(0,smoothedWanted-f.workers.length));wanted=smoothedWanted;const publicCuts=Math.max(0,(f.previousPublicJobSlots||0)-(f.publicJobSlots||0));let cuts=0;if(f.sector==='services'&&publicCuts>0){const directLimit=Math.max(1,Math.ceil(publicCuts/2)),publicWorkers=f.workers.filter(id=>personById(id)?.publicDepartment);for(const id of publicWorkers.slice(0,directLimit)){f.workers=f.workers.filter(x=>x!==id);const p=personById(id);if(p){closeEmploymentSpell(p);p.job=null;p.publicDepartment=null}cuts++}}const clearExcess=f.sector==='services'?(publicCuts>0||gapPerFirm<.05&&f.sales<Math.max(1,(f.workers.length-1)*workerCapacity*.72)):f.stock>Math.max(f.expectedSales,structural)*1.35&&gapPerFirm<.05,cutLimit=f.sector==='services'?Math.max(cuts,Math.ceil(publicCuts/2),1):1;while(f.workers.length>wanted&&clearExcess&&cuts<cutLimit){const p=personById(f.workers.pop());if(p){closeEmploymentSpell(p);p.job=null;p.publicDepartment=null}cuts++}}const unemployed=workingAgePeople().filter(p=>p.job===null).sort((a,b)=>a.id-b.id),essentialPressure=Object.fromEntries(['food','energy'].map(k=>[k,(lastDemandGap[k]||0)/Math.max(1,sectors[k].baselineDemand)]));for(const p of unemployed){const essentialChoices=firms.filter(f=>['food','energy'].includes(f.sector)&&essentialPressure[f.sector]>.18&&f.dormantMonths===0&&f.vacancies>0&&workerGrossWage(f,p)>=Math.max(minWage*.95,p.reservationWage*.72)),essential=essentialChoices.sort((a,b)=>essentialPressure[b.sector]*jobMatchWeight(p,b)-essentialPressure[a.sector]*jobMatchWeight(p,a))[0];if(essential){const match=Math.exp(-Math.abs((p.skillMultiplier||1)-(essential.skillRequirement||1))*2.6);if(match>.20&&randStream('labour')<clamp(.78+match*.20,.78,.99)){if(attachWorker(p,essential)){essential.vacancies--}}}}for(const p of unemployed.filter(x=>x.job===null)){const choices=firms.filter(f=>f.dormantMonths===0&&f.vacancies>0&&workerGrossWage(f,p)>=p.reservationWage*(f.sector==='food'||f.sector==='energy'?.78:.88)),f=weighted(choices,x=>jobMatchWeight(p,x)*(1+Math.min(2,(lastDemandGap[x.sector]||0)/Math.max(1,sectors[x.sector].baselineDemand)))),match=f?Math.exp(-Math.abs((p.skillMultiplier||1)-(f.skillRequirement||1))*2.6):0;if(f&&randStream('labour')<clamp(.66+match*.32,.66,.98)){if(attachWorker(p,f)){f.vacancies--}}}labourMobility();assignActivePublicRoles();syncAllHouseholds()}
+  function labourMarket(){const minWage=indexedPolicy('minimumWage'),populationScale=people.length/Math.max(1,basePopulation),demandTransmission=productivityDemandTransmission(),monthlyInflation=history.at(-1)?.inflation==null?0:history.at(-1).inflation/1200,labourForce=workingAgePeople(),unemployedBefore=labourForce.filter(p=>p.job===null).length,serviceFirms=sectorFirms('services');allocateDepartmentJobs();const reserveTarget=totalGovernmentBaselineBudget()*Number($('cashReserveMonths').value),excessCash=Math.max(0,government.cash-reserveTarget),annualGDP=Math.max(1,history.at(-1)?.annualisedNominalGDP||baseRealGDP*12),debtLimit=Number($('stabiliserDebtLimit').value)/100,debtRoom=Math.max(0,annualGDP*debtLimit-government.debt),unemploymentPct=labourForce.length?unemployedBefore/labourForce.length*100:0,averageServiceWage=avg(serviceFirms.map(f=>f.wage))||minWage,jobBudget=Math.min(excessCash*.04+debtRoom/60+stabiliserFinancingRoom(unemploymentPct)*.65,corePublicServiceBudget()*.45),affordableJobs=Math.max(0,Math.floor(jobBudget/Math.max(1,v61PublicJobNetCost(averageServiceWage)))),desiredPublicJobs=Math.floor(Math.max(0,unemployedBefore-labourForce.length*.08)*Number($('publicJobs').value)/100),rawStabiliserTotal=$('fiscalRule').value==='automatic'?Math.min(desiredPublicJobs,affordableJobs):0,previousStabiliserTotal=sum(serviceFirms.map(f=>f.stabiliserJobSlots||0)),stabiliserStep=Math.max(2,Math.ceil(labourForce.length*.006)),stabiliserTotal=clamp(rawStabiliserTotal,Math.max(0,previousStabiliserTotal-stabiliserStep),previousStabiliserTotal+stabiliserStep);serviceFirms.forEach((f,i)=>{f.previousPublicJobSlots=f.publicJobSlots||0;f.stabiliserJobSlots=Math.floor(stabiliserTotal/Math.max(1,serviceFirms.length))+(i<stabiliserTotal%Math.max(1,serviceFirms.length)?1:0);f.publicJobSlots=(f.departmentJobSlots||0)+(f.stabiliserJobSlots||0)});for(const p of people){if(!p.labourParticipant||p.retired)continue;if(p.job===null){p.unemployedMonths=(p.unemployedMonths||0)+1;const searchAdjustment=.006+Math.min(.010,p.unemployedMonths*.00025);p.reservationWage=Math.max(minWage*.68,p.reservationWage*(1+monthlyInflation*.22-searchAdjustment))}else{p.unemployedMonths=0;const current=firmById(p.job);if(current)p.reservationWage=.95*p.reservationWage+.05*workerGrossWage(current,p)}}for(const f of firms){f.wage=Math.max(f.wage,minWage);if(f.dormantMonths>0){f.vacancies=0;while(f.workers.length){const p=personById(f.workers.pop());if(p){closeEmploymentSpell(p);p.job=null;p.publicDepartment=null}}continue}const c=sectors[f.sector],gapPerFirm=(lastDemandGap[f.sector]||0)/Math.max(1,sectorFirms(f.sector).length),structural=c.baselineDemand*populationScale*demandTransmission,response=firmAdjustmentResponse(f,gapPerFirm,structural),shortageTarget=Math.max(f.sales,f.demandEWMA||f.expectedSales)+gapPerFirm*response*.45,normalTarget=.68*(f.demandEWMA||f.expectedSales)+.20*structural+.12*Math.max(f.sales,structural*.55),inventoryPenalty=f.sector==='services'?0:Math.max(0,f.stock-Math.max(f.demandEWMA||f.expectedSales,structural)*.72)*.12,targetOutput=Math.max(c.baselineDemand*.18,normalTarget,shortageTarget)-inventoryPenalty,workerCapacity=Math.max(.3,f.productivity*outputMultiplier(f.sector));let rawWanted=Math.ceil(Math.max(0,targetOutput)/workerCapacity)+(f.publicJobSlots||0);if(gapPerFirm>workerCapacity*.55)rawWanted+=1;const desiredStaff=clamp(Math.max(c.minStaff,rawWanted),0,160);f.desiredStaff=desiredStaff;const publicCapacity=f.sector==='services'?Math.max(0,f.publicJobSlots||0):0,effectiveMax=(f.maxStaff||22)+publicCapacity;f.capacityConstrainedStaff=Math.max(0,desiredStaff-effectiveMax);let wanted=clamp(desiredStaff,0,effectiveMax);if(!Number.isFinite(f.staffTarget)||f.staffTarget<=0)f.staffTarget=f.workers.length;const staffingAdjustment=wanted<f.staffTarget*.70?.18:.12;f.staffTarget=clamp(f.staffTarget+(wanted-f.staffTarget)*staffingAdjustment,0,effectiveMax);const smoothedWanted=Math.round(f.staffTarget),recoveryHiringBoost=clamp(unemploymentPct/100-.08,0,.55),monthlyHireCapacity=Math.max(1,Math.ceil(Math.max(1,f.workers.length)*(.08+recoveryHiringBoost*.10)));f.vacancies=Math.min(monthlyHireCapacity,Math.max(0,smoothedWanted-f.workers.length));wanted=smoothedWanted;const publicCuts=Math.max(0,(f.previousPublicJobSlots||0)-(f.publicJobSlots||0));let cuts=0;if(f.sector==='services'&&publicCuts>0){const directLimit=Math.max(1,Math.ceil(publicCuts/2)),publicWorkers=f.workers.filter(id=>personById(id)?.publicDepartment);for(const id of publicWorkers.slice(0,directLimit)){f.workers=f.workers.filter(x=>x!==id);const p=personById(id);if(p){closeEmploymentSpell(p);p.job=null;p.publicDepartment=null}cuts++}}const clearExcess=f.sector==='services'?(publicCuts>0||gapPerFirm<.05&&f.sales<Math.max(1,(f.workers.length-1)*workerCapacity*.72)):f.stock>Math.max(f.expectedSales,structural)*1.35&&gapPerFirm<.05,cutLimit=f.sector==='services'?Math.max(cuts,Math.ceil(publicCuts/2),1):1;while(f.workers.length>wanted&&clearExcess&&cuts<cutLimit){const p=personById(f.workers.pop());if(p){closeEmploymentSpell(p);p.job=null;p.publicDepartment=null}cuts++}}const unemployed=workingAgePeople().filter(p=>p.job===null).sort((a,b)=>a.id-b.id),essentialPressure=Object.fromEntries(['food','energy'].map(k=>[k,(lastDemandGap[k]||0)/Math.max(1,sectors[k].baselineDemand)])),vacancyFirms=firms.filter(f=>f.dormantMonths===0&&f.vacancies>0);for(const p of unemployed){const essentialChoices=vacancyFirms.filter(f=>['food','energy'].includes(f.sector)&&essentialPressure[f.sector]>.18&&f.dormantMonths===0&&f.vacancies>0&&workerGrossWage(f,p)>=Math.max(minWage*.95,p.reservationWage*.72)),essential=essentialChoices.sort((a,b)=>essentialPressure[b.sector]*jobMatchWeight(p,b)-essentialPressure[a.sector]*jobMatchWeight(p,a))[0];if(essential){const match=Math.exp(-Math.abs((p.skillMultiplier||1)-(essential.skillRequirement||1))*2.6);if(match>.20&&randStream('labour')<clamp(.78+match*.20,.78,.99)){if(attachWorker(p,essential)){essential.vacancies--}}}}for(const p of unemployed.filter(x=>x.job===null)){const choices=vacancyFirms.filter(f=>f.dormantMonths===0&&f.vacancies>0&&workerGrossWage(f,p)>=p.reservationWage*(f.sector==='food'||f.sector==='energy'?.78:.88)),f=weighted(choices,x=>jobMatchWeight(p,x)*(1+Math.min(2,(lastDemandGap[x.sector]||0)/Math.max(1,sectors[x.sector].baselineDemand)))),match=f?Math.exp(-Math.abs((p.skillMultiplier||1)-(f.skillRequirement||1))*2.6):0;if(f&&randStream('labour')<clamp(.66+match*.32,.66,.98)){if(attachWorker(p,f)){f.vacancies--}}}labourMobility();assignActivePublicRoles();syncAllHouseholds()}
   function payIncomes(){const payrollRate=Number($('payrollTax').value)/100,benefit=indexedPolicy('benefit')*clamp(1-(government?.fiscalAdjustment||0)*.30,.74,1),pension=indexedPolicy('pension')*clamp(1-(government?.fiscalAdjustment||0)*.18,.82,1),inactive=indexedPolicy('inactivitySupport')*clamp(1-(government?.fiscalAdjustment||0)*.25,.76,1),childBenefit=indexedPolicy('childBenefit')*clamp(1-(government?.fiscalAdjustment||0)*.18,.82,1);for(const f of firms){const wages=f.workers.map(id=>({id,gross:workerGrossWage(f,personById(id))})),payroll=sum(wages.map(x=>x.gross)),totalPayrollCost=payroll*(1+payrollRate);if(f.sector==='services'){f.publicSubsidy=0;for(const item of wages){const p=personById(item.id);if(!p?.publicDepartment)continue;const department=Object.values(publicDepartments).find(d=>d.label===p.publicDepartment),field=department?.field||'employmentSupportSpending';f.publicSubsidy+=governmentTransfer(f,item.gross*(1+payrollRate),field)}}const inputReserve=f.sector==='energy'?0:f.workers.length*f.productivity*outputMultiplier(f.sector)*sectors[f.sector].energyInput*Math.max(1,sectorPrice('energy'))*.82,requiredWorkingCash=totalPayrollCost+inputReserve;if(f.cash<requiredWorkingCash)createCredit(f,requiredWorkingCash-f.cash);const ratio=totalPayrollCost?clamp(Math.max(0,f.cash-inputReserve*.35)/totalPayrollCost,0,1):1;for(const item of wages){const p=personById(item.id),h=householdOfPerson(p);if(!p||!h)continue;const gross=item.gross*ratio,tax=incomeTaxDue(gross),payrollTax=gross*payrollRate;domesticTransfer(f,h,gross-tax);domesticTransfer(f,government,tax);recordTax(tax,'incomeTaxRevenue');domesticTransfer(f,government,payrollTax);recordTax(payrollTax,'payrollTaxRevenue');p.labourIncome=(p.labourIncome||0)+gross-tax;p.lifetimeLabourIncome=(p.lifetimeLabourIncome||0)+gross-tax;h.labourIncome=(h.labourIncome||0)+gross-tax;h.lifetimeLabourIncome=(h.lifetimeLabourIncome||0)+gross-tax;h.income+=gross-tax;f.wageCost+=gross+payrollTax}}for(const h of households){for(const p of householdPeople(h)){let amount=0,field='benefitSpending';if(p.ageMonths<18*12){amount=childBenefit;field='childBenefitSpending'}else if(p.retired){amount=pension;field='pensionSpending'}else if(p.labourParticipant&&p.job===null){amount=benefit;field='benefitSpending'}else if(!p.labourParticipant){amount=inactive;field='inactivitySpending'}if(amount>0){governmentTransfer(h,amount,field);h.income+=amount}}}if(pendingTransfer>0){const transfer=indexedBaseAmount(pendingTransfer);for(const h of households)governmentTransfer(h,transfer,'benefitSpending');pendingTransfer=0}syncAllHouseholds()}
   function monthlyImportCapacity(){
     const monthlyGDP=Math.max(1,(history.at(-1)?.annualisedNominalGDP||baseRealGDP*12)/12),exports=Math.max(0,world.monthExportEarnings||sum(Object.values(trade.exports||{}))),
@@ -2583,7 +2583,7 @@ function calculateGDP(output,initial=false){
     let successor=null;
     if(preserveContinuity&&!nuclearCompanyLockActive()){
       successor=createCompanyEntry(f.sector,'Receivership preserved part of the failed firm’s viable productive capacity');
-      successor.name=generatedCompanyName(f.sector,successor.id);successor.dormantMonths=0;successor.entryRampMonths=10;
+      successor.name=generatedCompanyName(f.sector,successor.id);successor.dormantMonths=0;successor.entryRampMonths=4;
       const capitalTransfer=Math.max(0,f.capitalValue*.42),stockTransfer=Math.max(0,f.stock*.28),energyTransfer=Math.max(0,(f.energyStock||0)*.28);
       successor.capitalValue=Math.max(successor.capitalValue*.45,capitalTransfer);successor.stock=stockTransfer;successor.energyStock=energyTransfer;
       successor.energyStockValue=Math.max(0,(f.energyStockValue||0)*.28);successor.energyStockRealValue=Math.max(0,(f.energyStockRealValue||0)*.28);
@@ -5491,6 +5491,698 @@ reset = function(...args) {
     if (history.at(-1)) v65RenderExtras();
   }
 })();
+/* SimFlation v66 stability, performance, election-detail and interface upgrade. */
+(() => {
+  'use strict';
+  if (globalThis.__SIMFLATION_V66_STABILITY_UI__) return;
+  globalThis.__SIMFLATION_V66_STABILITY_UI__ = true;
+
+  const MANAGED_BANDS = {
+    light:[.12,.28],
+    standard:[.40,.80],
+    heavy:[.85,1.35],
+    extreme:[1.35,2.20]
+  };
+  const LEGACY_MANAGED_LEGISLATIVE_ERROR = 'Managed legislative uplift fell outside the 40–80% range';
+  const LEGACY_MANAGED_PRESIDENTIAL_ERROR = 'Managed presidential uplift exceeded the permitted range';
+  const v65CollectRunChecks = collectRunChecks;
+  const v65Snapshot = snapshot;
+  const v65RenderPolitics = renderPolitics;
+  const v65SimulateElectionCore = simulateElectionCore;
+  const v65Draw = draw;
+  const v65Reset = reset;
+  const v65StepSimulation = stepSimulation;
+
+  function v66ManagedBand(level) {
+    return MANAGED_BANDS[level] || MANAGED_BANDS.standard;
+  }
+  function v66InferManagedLevel(uplift) {
+    const u = Number(uplift);
+    if (!Number.isFinite(u)) return null;
+    for (const [level,[lo,hi]] of Object.entries(MANAGED_BANDS)) if (u >= lo-.002 && u <= hi+.002) return level;
+    return null;
+  }
+  function v66ManagedUpliftValid(uplift, level = null) {
+    const u = Number(uplift);
+    if (!Number.isFinite(u)) return false;
+    const resolved = level && MANAGED_BANDS[level] ? level : v66InferManagedLevel(u);
+    if (!resolved) return false;
+    const [lo,hi] = v66ManagedBand(resolved);
+    return u >= lo-.002 && u <= hi+.002;
+  }
+  function v66HistoricalManagedLegislativeChecksPass() {
+    return (politics?.electionHistory || []).every(election => {
+      if (!election?.managedElection || !election?.managedAdvantage) return true;
+      const level = election.managedLevelAtCall || election.managedAdvantage.level || null;
+      return v66ManagedUpliftValid(election.managedAdvantage.uplift, level);
+    });
+  }
+  function v66HistoricalManagedPresidentialChecksPass() {
+    return (politics?.electionHistory || []).every(election => {
+      const p = election?.presidentResult;
+      if (!p?.managed || !Number.isFinite(Number(p.managedUplift))) return true;
+      const level = p.managedLevelAtCall || p.managedLevel || election.managedLevelAtCall || null;
+      return v66ManagedUpliftValid(p.managedUplift, level);
+    });
+  }
+
+  collectRunChecks = function() {
+    let problems = v65CollectRunChecks();
+    if (problems.includes(LEGACY_MANAGED_LEGISLATIVE_ERROR) && v66HistoricalManagedLegislativeChecksPass()) {
+      problems = problems.filter(p => p !== LEGACY_MANAGED_LEGISLATIVE_ERROR);
+    }
+    if (problems.includes(LEGACY_MANAGED_PRESIDENTIAL_ERROR) && v66HistoricalManagedPresidentialChecksPass()) {
+      problems = problems.filter(p => p !== LEGACY_MANAGED_PRESIDENTIAL_ERROR);
+    }
+    for (const election of politics?.electionHistory || []) {
+      const upper = election?.secondChamberResult;
+      if (!upper || !upper.v66DetailedBallot) continue;
+      const voteTotal = sum(Object.values(upper.rawVotes || {}));
+      const seatTotal = sum(Object.values(upper.seats || {}));
+      if (voteTotal !== upper.turnoutVotes) problems.push('Second-chamber votes do not reconcile with turnout');
+      if (seatTotal !== upper.size) problems.push('Second-chamber seats do not reconcile with chamber size');
+      if (upper.managedElection && !v66ManagedUpliftValid(upper.managedAdvantage?.uplift, upper.managedLevelAtCall)) problems.push('Second-chamber managed-election uplift is outside its configured band');
+    }
+    return [...new Set(problems)];
+  };
+
+  /* Increment the archived-person index rather than rebuilding the whole map after every death. */
+  let v66ArchiveRef = null;
+  let v66ArchiveLength = 0;
+  let v66ArchiveIndex = new Map();
+  globalThis.__simflationV64ArchivedPersonById = function(id) {
+    if (v66ArchiveRef !== personLifecycleHistory || personLifecycleHistory.length < v66ArchiveLength) {
+      v66ArchiveRef = personLifecycleHistory;
+      v66ArchiveLength = 0;
+      v66ArchiveIndex = new Map();
+    }
+    while (v66ArchiveLength < personLifecycleHistory.length) {
+      const record = personLifecycleHistory[v66ArchiveLength++];
+      if (record?.id !== undefined) v66ArchiveIndex.set(record.id, record);
+    }
+    return v66ArchiveIndex.get(id) || null;
+  };
+
+  function v66UnderlyingBalanceFromHistoryPosition(position) {
+    const s = history[position];
+    if (!s) return 0;
+    if (Number.isFinite(s.underlyingFiscalBalance)) return s.underlyingFiscalBalance;
+    const previous = position > 0 ? history[position-1] : null;
+    const bankSupport = Math.max(0, Number(s.cumulativeBankSupport || 0) - Number(previous?.cumulativeBankSupport || 0));
+    return Number(s.fiscalBalance || 0) + bankSupport;
+  }
+  function v66SmoothedUnderlyingBalance(months = 6) {
+    const start = Math.max(0, history.length - months);
+    let weighted = 0, weightTotal = 0;
+    for (let i = start; i < history.length; i++) {
+      const w = i - start + 1;
+      weighted += v66UnderlyingBalanceFromHistoryPosition(i) * w;
+      weightTotal += w;
+    }
+    return weightTotal ? weighted / weightTotal : 0;
+  }
+
+  stabiliserFinancingRoom = function(unemploymentPct) {
+    const latest = history.at(-1);
+    const annualGDP = Math.max(1, latest?.annualisedNominalGDP || baseRealGDP * 12);
+    const monthlyGDP = annualGDP / 12;
+    const smoothedUnderlying = Math.max(0, v66SmoothedUnderlyingBalance(6));
+    const weakness = clamp((unemploymentPct - 8) / 32, 0, 1.5);
+    const marketAccess = clamp(government?.marketAccess ?? 1, 0, 1);
+    return smoothedUnderlying * .45 + monthlyGDP * .018 * weakness * marketAccess;
+  };
+
+  prepareFiscalStabiliser = function() {
+    fiscalBoost = {consumption:0, investment:0};
+    if ($('fiscalRule').value !== 'automatic' || !history.length) return;
+    const latest = history.at(-1);
+    const unemployment = latest.unemployment * 100;
+    const growth = trailingRealGrowth();
+    const baseMonthly = totalGovernmentBaselineBudget();
+    const reserveTarget = baseMonthly * Number($('cashReserveMonths').value);
+    const excess = Math.max(0, government.cash - reserveTarget);
+    const weakness = clamp(Math.max(0, unemployment - 6) / 14 + Math.max(0, 2 - growth) / 7, 0, 1.5);
+    const finance = excess * .025 + stabiliserFinancingRoom(unemployment) * .35;
+    const cap = corePublicServiceBudget() * .35;
+    const desired = Math.min(finance, cap) * weakness;
+    const previous = Math.max(0, Number(latest.automaticFiscalSupport || 0));
+    const rise = Math.max(baseMonthly * .04, previous * .35, 1);
+    const fall = Math.max(baseMonthly * .04, previous * .30, 1);
+    const support = history.length < 2 ? desired : clamp(desired, Math.max(0, previous - fall), previous + rise);
+    government.v66FiscalSupportTarget = desired;
+    fiscalBoost = {consumption:support * .48, investment:support * .52};
+  };
+
+  snapshot = function(...args) {
+    const s = v65Snapshot(...args);
+    const bankSupport = Math.max(0, Number(government.bankSupportSpending || 0));
+    const bankRecovery = Math.max(0, Number(government.bankSupportRecovery || 0));
+    s.bankSupportThisMonth = bankSupport;
+    s.bankSupportRecoveryThisMonth = bankRecovery;
+    s.underlyingFiscalBalance = Number(s.fiscalBalance || 0) + bankSupport - bankRecovery;
+    const prior = history.slice(-11);
+    let balance = s.underlyingFiscalBalance, gdp = Number(s.nominalGDP || 0);
+    for (let i = 0; i < prior.length; i++) {
+      const absolute = history.length - prior.length + i;
+      balance += v66UnderlyingBalanceFromHistoryPosition(absolute);
+      gdp += Number(prior[i].nominalGDP || 0);
+    }
+    s.underlyingFiscalBalancePct = gdp > 0 ? balance / gdp * 100 : 0;
+    s.fiscalSupportTarget = Number(government.v66FiscalSupportTarget || s.automaticFiscalSupport || 0);
+    return s;
+  };
+
+  function v66ApportionInteger(weights, total) {
+    const keys = Object.keys(weights || {}).filter(k => Number(weights[k]) > 0);
+    const out = Object.fromEntries(Object.keys(weights || {}).map(k => [k,0]));
+    const sumWeights = sum(keys.map(k => Number(weights[k]) || 0));
+    if (!keys.length || !sumWeights || total <= 0) return out;
+    const remainders = [];
+    let used = 0;
+    for (const key of keys) {
+      const exact = total * Number(weights[key]) / sumWeights;
+      const whole = Math.floor(exact);
+      out[key] = whole; used += whole;
+      remainders.push({key, remainder:exact-whole});
+    }
+    remainders.sort((a,b) => b.remainder-a.remainder || a.key.localeCompare(b.key));
+    for (let i = 0; used < total; i++, used++) out[remainders[i % remainders.length].key]++;
+    return out;
+  }
+  function v66VoteShares(rawVotes) {
+    const total = Math.max(1, sum(Object.values(rawVotes || {})));
+    return Object.fromEntries(Object.entries(rawVotes || {}).map(([party,votes]) => [party, Number(votes || 0) / total * 100]));
+  }
+  function v66AllocateUpperSeats(votes, size) {
+    const parties = Object.keys(votes || {}).filter(p => Number(votes[p]) > 0 && politicalParties[p]?.active !== false);
+    const seats = Object.fromEntries(Object.keys(votes || {}).map(p => [p,0]));
+    if (!parties.length || size <= 0) return seats;
+    for (let i = 0; i < size; i++) {
+      const winner = parties.slice().sort((a,b) => (Number(votes[b]) / ((seats[b] || 0) + 1)) - (Number(votes[a]) / ((seats[a] || 0) + 1)) || Number(votes[b])-Number(votes[a]) || a.localeCompare(b))[0];
+      seats[winner] = (seats[winner] || 0) + 1;
+    }
+    return seats;
+  }
+  function v66ManagedUpperBallot(underlyingRaw, incumbent, uplift, level) {
+    const raw = {...underlyingRaw};
+    const total = sum(Object.values(raw));
+    const current = Number(raw[incumbent] || 0);
+    if (!incumbent || total <= 0 || current <= 0 || !v66ManagedUpliftValid(uplift, level)) return {rawVotes:raw, advantage:null};
+    const baseShare = current / total * 100;
+    const targetShare = clamp(baseShare * (1 + uplift), baseShare, 99);
+    const needed = Math.min(total-current, Math.max(0, Math.round(total * targetShare / 100) - current));
+    const donors = Object.fromEntries(Object.entries(raw).filter(([party,votes]) => party !== incumbent && votes > 0));
+    const removals = v66ApportionInteger(donors, needed);
+    let moved = 0;
+    for (const [party,count] of Object.entries(removals)) {
+      const remove = Math.min(raw[party] || 0, count || 0);
+      raw[party] -= remove; moved += remove;
+    }
+    raw[incumbent] = current + moved;
+    const actualShare = raw[incumbent] / Math.max(1,total) * 100;
+    return {rawVotes:raw, advantage:{level,uplift,baseShare,targetShare,actualShare,actualUplift:baseShare>0?actualShare/baseShare-1:0,flipped:moved}};
+  }
+  function v66BuildUpperBallot(result) {
+    const previous = result.secondChamberResult;
+    if (!previous) return null;
+    const size = Number(previous.size || politics?.constitution?.secondChamberSize || 0);
+    const baseRaw = result.underlyingRawVotes || result.rawVotes || {};
+    const turnoutVotes = Number(result.turnoutVotes || sum(Object.values(baseRaw)) || 0);
+    const weights = {};
+    const parties = new Set([...Object.keys(baseRaw), ...Object.keys(result.underlyingVoteShares || {}), ...Object.keys(result.voteShares || {})]);
+    for (const party of parties) {
+      const base = Number(baseRaw[party] || 0) || Math.max(0, Number(result.underlyingVoteShares?.[party] || result.voteShares?.[party] || 0));
+      if (base <= 0) { weights[party]=0; continue; }
+      const shift = (politicalStaticUnit('v66-upper-ballot-'+party, Number(result.index || monthIndex), 66) - .5) * .22;
+      weights[party] = base * Math.exp(shift);
+    }
+    const underlyingRawVotes = v66ApportionInteger(weights, turnoutVotes);
+    const managedElection = result.electionStatusAtCall === 'managed' || !!result.managedElection;
+    const managedLevelAtCall = managedElection ? (result.managedLevelAtCall || politics?.constitution?.managedElectionLevel || 'standard') : null;
+    const incumbent = result.incumbentPartyAtCall || result.incumbentParty || result.previousLeadParty || result.managedAdvantage?.incumbentParty || politics?.leadParty;
+    const applied = managedElection ? v66ManagedUpperBallot(underlyingRawVotes, incumbent, Number(result.managedAdvantage?.uplift || 0), managedLevelAtCall) : {rawVotes:{...underlyingRawVotes},advantage:null};
+    const rawVotes = applied.rawVotes;
+    const seats = v66AllocateUpperSeats(rawVotes, size);
+    const upper = {
+      ...previous,
+      v66DetailedBallot:true,
+      electoralSystem:'National proportional ballot (D’Hondt)',
+      electorate:Number(result.electorate || turnoutVotes),
+      turnoutVotes,
+      turnout:Number(result.turnout || (result.electorate ? turnoutVotes/result.electorate*100 : 0)),
+      rawVotes,
+      voteShares:v66VoteShares(rawVotes),
+      underlyingRawVotes,
+      underlyingVoteShares:v66VoteShares(underlyingRawVotes),
+      seats,
+      managedElection,
+      managedLevelAtCall,
+      managedAdvantage:applied.advantage
+    };
+    result.secondChamberResult = upper;
+    if (politics?.secondChamberSystem) {
+      politics.secondChamberSystem.seats = {...seats};
+      politics.secondChamberSystem.lastElectionIndex = Number(result.index || monthIndex);
+      const entry = (politics.secondChamberSystem.history || []).slice().reverse().find(x => x.index === Number(result.index || monthIndex) && x.type === 'elected');
+      if (entry) Object.assign(entry, JSON.parse(JSON.stringify(upper)), {date:result.date, reason:'Second-chamber election held alongside the general election'});
+    }
+    return upper;
+  }
+
+  simulateElectionCore = function(...args) {
+    const before = politics?.electionHistory?.length || 0;
+    const out = v65SimulateElectionCore(...args);
+    if ((politics?.electionHistory?.length || 0) > before) {
+      const result = politics.electionHistory.at(-1);
+      if (result) {
+        if (result.managedElection) {
+          result.managedLevelAtCall = politics?.constitution?.managedElectionLevel || 'standard';
+          if (result.managedAdvantage) result.managedAdvantage.level = result.managedLevelAtCall;
+        }
+        if (result.presidentResult?.managed) {
+          result.presidentResult.managedLevelAtCall = politics?.constitution?.managedElectionLevel || 'standard';
+        }
+        const upper = v66BuildUpperBallot(result);
+        if (upper) v66EnhanceElectionModal(result, upper);
+      }
+    }
+    return out;
+  };
+
+  function v66PartyLabel(party) { return politicalParties?.[party]?.label || party; }
+  function v66ElectionRows(upper) {
+    if (!upper) return '';
+    const parties = Object.keys(upper.rawVotes || {}).sort((a,b) => Number(upper.voteShares?.[b]||0)-Number(upper.voteShares?.[a]||0));
+    return parties.filter(p => (upper.rawVotes[p]||0) > 0 || (upper.seats?.[p]||0) > 0).map(p => {
+      const official = Number(upper.voteShares?.[p] || 0), underlying = Number(upper.underlyingVoteShares?.[p] || 0);
+      const underlyingCell = upper.managedElection ? `<td>${underlying.toFixed(1)}%</td>` : '';
+      return `<tr><td>${v66PartyLabel(p)}</td><td>${Number(upper.rawVotes?.[p]||0).toLocaleString('en-GB')}</td><td>${official.toFixed(1)}%</td>${underlyingCell}<td>${Number(upper.seats?.[p]||0)}</td></tr>`;
+    }).join('');
+  }
+  function v66UpperTable(upper) {
+    if (!upper) return '<p class="small">No elected second-chamber result is available.</p>';
+    return `<div class="v66-upper-meta"><span>${upper.electoralSystem || 'Proportional ballot'}</span><span>${Number(upper.turnoutVotes||0).toLocaleString('en-GB')} votes · ${Number(upper.turnout||0).toFixed(1)}% turnout</span>${upper.managedElection?`<span>${String(upper.managedLevelAtCall||'managed')} managed election · underlying vote retained</span>`:''}</div><div class="table-wrap"><table class="election-result-table"><thead><tr><th>Party</th><th>Votes</th><th>Official vote</th>${upper.managedElection?'<th>Underlying vote</th>':''}<th>Seats</th></tr></thead><tbody>${v66ElectionRows(upper)}</tbody></table></div>`;
+  }
+  function v66EnhanceElectionModal(result, upper) {
+    const content = $('electionModalContent'); if (!content) return;
+    const blocks = [...content.querySelectorAll('.election-government')];
+    const block = blocks.at(-1);
+    if (block && !block.querySelector('.v66-upper-election-detail')) {
+      const detail = document.createElement('div');
+      detail.className = 'v66-upper-election-detail';
+      detail.innerHTML = `<h4>Second-chamber vote</h4>${v66UpperTable(upper)}`;
+      block.appendChild(detail);
+    }
+  }
+
+  function v66InstallPoliticsTabs() {
+    const panel = $('politics');
+    if (!panel || $('v66PoliticsTabs')) return;
+    const heading = panel.querySelector('.politics-heading');
+    const tabs = document.createElement('div');
+    tabs.id = 'v66PoliticsTabs'; tabs.className = 'v66-politics-tabs';
+    tabs.innerHTML = '<button type="button" data-politics-tab="government" class="active">Government</button><button type="button" data-politics-tab="elections">Elections</button><button type="button" data-politics-tab="leaders">Leaders</button><button type="button" data-politics-tab="constitution">Constitution</button><button type="button" data-politics-tab="history">History & regions</button>';
+    heading?.insertAdjacentElement('afterend', tabs);
+    const groups = {};
+    for (const id of ['government','elections','leaders','constitution','history']) {
+      const section = document.createElement('div'); section.className='v66-politics-view'; section.dataset.politicsView=id; section.hidden=id!=='government'; groups[id]=section; panel.appendChild(section);
+    }
+    const move = (node,group) => { if (node && !node.closest('.v66-politics-view')) groups[group].appendChild(node); };
+    ['.government-now','.timeline-panel','.government-overview','#parliamentBar','#parliamentSummary','#parliamentMajorityNote','#politicsLegend','#secondChamberPanel'].forEach(sel=>move(panel.querySelector(sel),'government'));
+    const details = panel.querySelector('.politics-details');
+    if (details) { const children=[...details.children]; move(children[0],'elections'); move(children[1],'leaders'); details.remove(); }
+    const historyColumns = panel.querySelector('.history-columns'); move(historyColumns,'leaders');
+    [...panel.querySelectorAll('.monarchy-panel')].forEach(node=>move(node,'constitution'));
+    move($('personalistSuccessionPanel'),'constitution');
+    move(panel.querySelector('.constitutional-control-panel'),'constitution');
+    [...panel.querySelectorAll('details.control-section')].forEach(node => {
+      const title=node.querySelector('summary')?.textContent.trim()||'';
+      if(title==='Current party leaders'||title==='Party support, ideology and political pressures') move(node,'leaders');
+      else if(title==='Constitution and electoral system') move(node,'constitution');
+      else move(node,'history');
+    });
+    const other = $('otherPoliticalEvents')?.closest('details'); move(other,'history');
+    const upperHistory = document.createElement('div');
+    upperHistory.id='v66SecondChamberElectionPanel'; upperHistory.className='government-card';
+    upperHistory.innerHTML='<div class="v66-section-head"><div><h3>Elected second chamber results</h3><p class="small">A separate national upper-house ballot is recorded whenever the second chamber is elected.</p></div><select id="secondChamberElectionSelect" aria-label="Select a second chamber election"></select></div><div id="secondChamberElectionDetail"></div>';
+    groups.elections.appendChild(upperHistory);
+    tabs.addEventListener('click', event => {
+      const button=event.target.closest('[data-politics-tab]'); if(!button)return;
+      const selected=button.dataset.politicsTab;
+      tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b===button));
+      panel.querySelectorAll('.v66-politics-view').forEach(v=>v.hidden=v.dataset.politicsView!==selected);
+      if(selected==='elections') v66RenderUpperElectionHistory();
+    });
+    $('secondChamberElectionSelect')?.addEventListener('change',v66RenderUpperElectionHistory);
+  }
+
+  function v66RenderUpperElectionHistory() {
+    const select = $('secondChamberElectionSelect'), detail = $('secondChamberElectionDetail');
+    if (!select || !detail) return;
+    const elections=(politics?.electionHistory||[]).filter(e=>e.secondChamberResult);
+    const previous=select.value;
+    select.innerHTML=elections.length?elections.map((e,i)=>`<option value="${i}">${e.date} · ${e.secondChamberResult.size} seats</option>`).join(''):'<option>No elected second-chamber elections yet</option>';
+    if(!elections.length){detail.innerHTML='<p class="small">Choose an elected second chamber and hold a general election to create a result.</p>';return;}
+    const index=previous!==''&&Number(previous)<elections.length?Number(previous):elections.length-1; select.value=String(index);
+    const election=elections[index], upper=election.secondChamberResult;
+    detail.innerHTML=`<div class="v66-election-title"><b>${election.date}</b><span>${upper.size} seats</span></div>${v66UpperTable(upper)}<div class="parliament-bar">${seatBarHtml(upper.seats||{})}</div><div class="politics-legend">${seatLegendHtml(upper.seats||{})}</div>`;
+  }
+
+  function v66InstallInterface() {
+    const speed=$('speed');
+    if(speed && !speed.dataset.v66){
+      const old=speed.value;
+      speed.innerHTML='<option value="6000">Observe — one month every 6 seconds</option><option value="1000">Normal — about one month per second</option><option value="250">Fast — about four months per second</option><option value="100">Turbo — batched, reduced redraws</option><option value="40">Long run — maximum throughput</option>';
+      speed.value=old==='2000'?'250':([...speed.options].some(o=>o.value===old)?old:'250');
+      speed.dataset.v66='1';
+    }
+    const callout=document.querySelector('.callout');
+    if(callout)callout.innerHTML='<b>Start with the overview.</b> Headline fiscal figures use a rolling period so one-off bailouts do not masquerade as the underlying budget position. Monthly flows and exceptional events are shown separately. Use the sticky navigation to jump between systems.';
+    const nav=document.querySelector('.dashboard-nav');
+    if(nav){nav.classList.add('v66-dashboard-nav');nav.innerHTML='<a href="#overview">Overview</a><a href="#finance-dashboard">Public finances</a><a href="#housing-dashboard">Housing</a><a href="#politics">Politics</a><a href="#distribution">People & wealth</a><a href="#business">Business</a><a href="#policy-controls">Policies</a><a href="#detailed-results">Advanced data</a>';}
+    if($('overview')&&!$('v66ChangeDrivers')){
+      const drivers=document.createElement('section');drivers.id='v66ChangeDrivers';drivers.className='v66-driver-panel';drivers.innerHTML='<div class="v66-section-head"><div><span class="eyebrow">This month</span><h2>What changed, and why?</h2></div><span class="small">Separates persistent trends from one-off shocks.</span></div><div class="v66-driver-grid"><div class="v66-driver-card"><span>GDP</span><b id="v66DriverGDP">—</b><small id="v66DriverGDPDetail">—</small></div><div class="v66-driver-card"><span>Jobs</span><b id="v66DriverJobs">—</b><small id="v66DriverJobsDetail">—</small></div><div class="v66-driver-card"><span>Budget</span><b id="v66DriverFiscal">—</b><small id="v66DriverFiscalDetail">—</small></div><div class="v66-driver-card"><span>Exceptional flows</span><b id="v66DriverOneOff">None</b><small id="v66DriverOneOffDetail">No one-off fiscal event this month.</small></div></div>';
+      $('overview').insertAdjacentElement('afterend',drivers);
+    }
+    const finance=$('finance-dashboard');
+    if(finance&&!$('v66FiscalClarity')){
+      const block=document.createElement('div');block.id='v66FiscalClarity';block.className='v66-fiscal-clarity';block.innerHTML='<div class="v66-stat"><span>Underlying balance</span><b id="v66UnderlyingFiscal">—</b><small>Rolling period, excluding bank rescues/recoveries</small></div><div class="v66-stat"><span>Headline balance</span><b id="v66HeadlineFiscal">—</b><small>Rolling period, including one-offs</small></div><div class="v66-stat"><span>Bank support this month</span><b id="v66BankSupport">—</b><small id="v66BankSupportDetail">Exceptional financial-system flow</small></div><div class="v66-stat"><span>Automatic stabiliser</span><b id="v66FiscalSupport">—</b><small id="v66FiscalSupportDetail">Smoothed response to weakness and fiscal space</small></div>';
+      finance.querySelector('.section-intro')?.insertAdjacentElement('afterend',block);
+    }
+    const constitution=document.querySelector('.constitutional-control-panel');
+    if(constitution){
+      const intro=constitution.querySelector(':scope > p.small');
+      if(intro)intro.textContent='Constitutional reform occurs only when you apply it. Competitive elections follow voter choices. Managed elections preserve the underlying voter result but apply the selected level of incumbent advantage to the official result. An elected second chamber receives its own national ballot and result.';
+    }
+    v66InstallPoliticsTabs();
+    if(!$('v66UiStyle')){
+      const style=document.createElement('style');style.id='v66UiStyle';style.textContent=`
+      .v66-dashboard-nav{position:sticky;top:0;z-index:18;background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:14px;padding:7px;margin-bottom:16px;display:flex;gap:4px;overflow-x:auto;box-shadow:var(--shadow-soft)}
+      .v66-dashboard-nav a{white-space:nowrap;text-decoration:none;color:var(--muted);font-size:.79rem;font-weight:760;padding:8px 10px;border-radius:9px}.v66-dashboard-nav a:hover{background:var(--accent-soft);color:var(--accent)}
+      .v66-driver-panel{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:16px;margin:-3px 0 18px;box-shadow:var(--shadow-soft)}.v66-section-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:12px}.v66-section-head p{margin:4px 0 0}.v66-section-head select{width:auto;min-width:210px}
+      .v66-driver-grid,.v66-fiscal-clarity{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.v66-driver-card,.v66-stat{border:1px solid var(--border);border-radius:13px;background:var(--panel-2);padding:11px;min-width:0}.v66-driver-card span,.v66-stat span{display:block;color:var(--muted);font-size:.69rem;text-transform:uppercase;letter-spacing:.055em;font-weight:800}.v66-driver-card b,.v66-stat b{display:block;font-size:1.08rem;margin-top:5px}.v66-driver-card small,.v66-stat small{display:block;color:var(--muted);font-size:.75rem;line-height:1.4;margin-top:4px}.v66-fiscal-clarity{margin:12px 0 16px}
+      .v66-politics-tabs{display:flex;gap:6px;overflow-x:auto;padding:5px;border:1px solid var(--border);background:var(--panel-2);border-radius:13px;margin:13px 0}.v66-politics-tabs button{width:auto;white-space:nowrap;padding:8px 11px;box-shadow:none}.v66-politics-tabs button.active{background:var(--accent);border-color:var(--accent);color:white}.v66-politics-view{display:grid;gap:14px}.v66-politics-view[hidden]{display:none!important}.v66-politics-view .government-card{margin-top:0}.v66-upper-election-detail{margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}.v66-upper-election-detail h4{margin:0 0 8px}.v66-upper-meta{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.v66-upper-meta span{font-size:.72rem;padding:5px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:700}.v66-election-title{display:flex;justify-content:space-between;gap:10px;margin:8px 0}.v66-election-title span{color:var(--muted)}
+      .simulation-bar .v66-perf{font-size:.72rem;color:var(--muted);white-space:nowrap}
+      @media(max-width:900px){.v66-driver-grid,.v66-fiscal-clarity{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.v66-driver-grid,.v66-fiscal-clarity{grid-template-columns:1fr}.v66-section-head{display:block}.v66-section-head select{width:100%;margin-top:8px}}
+      `;document.head.appendChild(style);
+    }
+  }
+
+  function v66LargestSectorChange(current, previous) {
+    if (!current?.gdpComponents || !previous?.gdpComponents) return null;
+    return Object.keys(current.gdpComponents).map(key=>({key,change:Number(current.gdpComponents[key]||0)-Number(previous.gdpComponents[key]||0)})).sort((a,b)=>Math.abs(b.change)-Math.abs(a.change))[0] || null;
+  }
+  function v66RenderClarity(s) {
+    if (!s) return;
+    const previous=history.length>1?history[history.length-2]:null;
+    if($('v66DriverGDP'))$('v66DriverGDP').textContent=(s.monthlyGrowth>=0?'+':'')+Number(s.monthlyGrowth||0).toFixed(1)+'%';
+    if($('v66DriverGDPDetail')){const sector=v66LargestSectorChange(s,previous);$('v66DriverGDPDetail').textContent=sector?`${sectors[sector.key]?.name||sector.key} made the largest sector contribution to this month’s change.`:'Monthly real output compared with the previous month.';}
+    const jobChange=previous?(Number(s.unemployment||0)-Number(previous.unemployment||0))*100:0;
+    if($('v66DriverJobs'))$('v66DriverJobs').textContent=(jobChange>=0?'+':'')+jobChange.toFixed(1)+' pp';
+    if($('v66DriverJobsDetail'))$('v66DriverJobsDetail').textContent=`Unemployment is ${(Number(s.unemployment||0)*100).toFixed(1)}%; ${Number(s.publicJobs||0)} temporary/public jobs are active.`;
+    if($('v66DriverFiscal'))$('v66DriverFiscal').textContent=(Number(s.underlyingFiscalBalancePct||0)>=0?'+':'')+Number(s.underlyingFiscalBalancePct||0).toFixed(1)+'% GDP';
+    if($('v66DriverFiscalDetail'))$('v66DriverFiscalDetail').textContent=`Underlying rolling balance; headline including one-offs ${(Number(s.fiscalBalancePct||0)>=0?'+':'')+Number(s.fiscalBalancePct||0).toFixed(1)}%.`;
+    const oneOff=Number(s.bankSupportThisMonth||0);
+    if($('v66DriverOneOff'))$('v66DriverOneOff').textContent=oneOff>0?money(oneOff):'None';
+    if($('v66DriverOneOffDetail'))$('v66DriverOneOffDetail').textContent=oneOff>0?'Bank rescue/support is shown separately so it does not drive the underlying fiscal signal.':'No bank rescue/support flow this month.';
+    if($('v66UnderlyingFiscal'))$('v66UnderlyingFiscal').textContent=(Number(s.underlyingFiscalBalancePct||0)>=0?'+':'')+Number(s.underlyingFiscalBalancePct||0).toFixed(1)+'% GDP';
+    if($('v66HeadlineFiscal'))$('v66HeadlineFiscal').textContent=(Number(s.fiscalBalancePct||0)>=0?'+':'')+Number(s.fiscalBalancePct||0).toFixed(1)+'% GDP';
+    if($('v66BankSupport'))$('v66BankSupport').textContent=money(oneOff);
+    if($('v66BankSupportDetail'))$('v66BankSupportDetail').textContent=oneOff>0?'One-off support is included in the headline balance, excluded from the underlying balance.':'No bank support paid this month.';
+    if($('v66FiscalSupport'))$('v66FiscalSupport').textContent=money(Number(s.automaticFiscalSupport||0));
+    if($('v66FiscalSupportDetail'))$('v66FiscalSupportDetail').textContent=`Target ${money(Number(s.fiscalSupportTarget||0))}; changes are ramped rather than switching on/off after one month.`;
+    if($('pulseFiscalDetail'))$('pulseFiscalDetail').textContent='Headline rolling balance · underlying '+(Number(s.underlyingFiscalBalancePct||0)>=0?'+':'')+Number(s.underlyingFiscalBalancePct||0).toFixed(1)+'% GDP';
+    if($('fiscalDetail'))$('fiscalDetail').textContent=(s.fiscalBalanceMonths>=12?'Last 12 months':'First '+s.fiscalBalanceMonths+' months')+' headline · underlying '+(Number(s.underlyingFiscalBalancePct||0)>=0?'+':'')+Number(s.underlyingFiscalBalancePct||0).toFixed(1)+'% GDP · current month '+(s.fiscalBalance>=0?'surplus ':'deficit ')+money(Math.abs(s.fiscalBalance));
+  }
+
+  renderPolitics = function(...args) {
+    const out=v65RenderPolitics(...args);
+    v66InstallPoliticsTabs();
+    v66RenderUpperElectionHistory();
+    return out;
+  };
+
+  draw = function(s) {
+    const out=v65Draw(s);
+    v66InstallInterface();
+    v66RenderClarity(s);
+    v66RenderPerformance();
+    return out;
+  };
+
+  let v66PerformanceSamples=[];
+  stepSimulation = function(...args) {
+    const before=monthIndex, started=performance.now();
+    const out=v65StepSimulation(...args);
+    if(monthIndex!==before){v66PerformanceSamples.push(performance.now()-started);if(v66PerformanceSamples.length>120)v66PerformanceSamples.shift();}
+    return out;
+  };
+  function v66PerformanceSummary() {
+    const values=v66PerformanceSamples.slice().sort((a,b)=>a-b), average=values.length?sum(values)/values.length:0, p95=values.length?values[Math.min(values.length-1,Math.floor(values.length*.95))]:0;
+    return {samples:values.length,averageMs:average,p95Ms:p95,people:people.length,households:households.length,firms:firms.length,historyMonths:history.length};
+  }
+  function v66RenderPerformance() {
+    const bar=$('simulationBar');if(!bar)return;
+    let node=$('v66PerfStatus');if(!node){node=document.createElement('span');node.id='v66PerfStatus';node.className='v66-perf';bar.appendChild(node);}
+    const p=v66PerformanceSummary();node.textContent=p.samples?`${p.averageMs.toFixed(0)} ms/month · ${p.people.toLocaleString('en-GB')} people`:`${p.people.toLocaleString('en-GB')} people`;
+    node.title=`Last ${p.samples} simulated months: average ${p.averageMs.toFixed(1)} ms, p95 ${p.p95Ms.toFixed(1)} ms. ${p.households} households, ${p.firms} firms.`;
+  }
+
+  reset = function(...args) {
+    v66PerformanceSamples=[];government && (government.v66FiscalSupportTarget=0);
+    const out=v65Reset(...args);
+    v66InstallInterface();
+    if(history.at(-1))v66RenderClarity(history.at(-1));
+    return out;
+  };
+
+  function v66StopAndExportRun() {
+    running=false;$('run').textContent='Run';draw(history.at(-1));
+    const analysis=buildAnalysisPackage();
+    const current=globalThis.__simflationCurrent || {};
+    const releaseVersion=current.releaseVersion || '0.9.0', modelVersion=current.modelVersion || 'v66';
+    analysis.model=`SimFlation ${releaseVersion} (Model ${modelVersion})`;
+    analysis.releaseVersion=releaseVersion;analysis.modelVersion=modelVersion;analysis.formatVersion=Math.max(51,Number(analysis.formatVersion)||0);
+    analysis.performance=v66PerformanceSummary();
+    if(analysis.currentState?.politics && analysis.politics)delete analysis.currentState.politics;
+    const json=JSON.stringify(analysis,(key,value)=>typeof value==='number'&&!Number.isFinite(value)?null:value);
+    const blob=new Blob([json],{type:'application/json'}),url=URL.createObjectURL(blob),safeDate=date().label.replace(/\s+/g,'-').toLowerCase(),link=document.createElement('a');
+    link.href=url;link.download=`simflation-${releaseVersion}-model-${modelVersion}-run-${safeDate}-seed-${$('seed').value}.json`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    const status=$('exportStatus');status.classList.add('exported');status.textContent='Simulation paused and compact analysis file downloaded. Upload the JSON file to ChatGPT for diagnosis.';$('runStatus').textContent='Paused — analysis file exported';
+  }
+  const exportButton=$('exportRun');
+  if(exportButton){const replacement=exportButton.cloneNode(true);exportButton.replaceWith(replacement);replacement.addEventListener('click',v66StopAndExportRun);}
+
+  globalThis.__simflationV66Audit={
+    managedBand:level=>[...v66ManagedBand(level)],
+    inferManagedLevel:v66InferManagedLevel,
+    managedUpliftValid:v66ManagedUpliftValid,
+    smoothedUnderlyingFiscalBalance:()=>v66SmoothedUnderlyingBalance(6),
+    performance:v66PerformanceSummary,
+    latestUpperElection:()=>{const e=(politics?.electionHistory||[]).slice().reverse().find(x=>x.secondChamberResult);return e?JSON.parse(JSON.stringify(e.secondChamberResult)):null;},
+    simulateLegacyHeavyCheck(uplift=1.093){return {valid:v66ManagedUpliftValid(uplift,null),inferred:v66InferManagedLevel(uplift)};}
+  };
+
+  v66InstallInterface();
+})();
+/* SimFlation v66 final integrity compatibility and interface polish. */
+(() => {
+  'use strict';
+  if (globalThis.__SIMFLATION_V66_UI_POLISH__) return;
+  globalThis.__SIMFLATION_V66_UI_POLISH__ = true;
+
+  const priorCollectRunChecks = collectRunChecks;
+  const priorDraw = draw;
+  const legacyLegislative = 'Managed legislative uplift fell outside the 40–80% range';
+  const legacyPresidential = 'Managed presidential uplift exceeded the permitted range';
+
+  collectRunChecks = function() {
+    let problems = priorCollectRunChecks().filter(p => p !== legacyLegislative && p !== legacyPresidential);
+    const audit = globalThis.__simflationV66Audit;
+    for (const election of politics?.electionHistory || []) {
+      if (election?.managedElection && election?.managedAdvantage) {
+        const level = election.managedLevelAtCall || election.managedAdvantage.level || audit?.inferManagedLevel?.(election.managedAdvantage.uplift);
+        if (!audit?.managedUpliftValid?.(election.managedAdvantage.uplift, level)) problems.push('Managed legislative uplift fell outside its configured intensity range');
+      }
+      const p = election?.presidentResult;
+      if (p?.managed && Number.isFinite(Number(p.managedUplift))) {
+        const level = p.managedLevelAtCall || p.managedLevel || election.managedLevelAtCall || audit?.inferManagedLevel?.(p.managedUplift);
+        if (!audit?.managedUpliftValid?.(p.managedUplift, level)) problems.push('Managed presidential uplift fell outside its configured intensity range');
+      }
+    }
+    return [...new Set(problems)];
+  };
+
+  function installPageOrder() {
+    const driver = $('v66ChangeDrivers'), finance = $('finance-dashboard'), housing = $('housing-dashboard');
+    if (driver && finance && driver.nextElementSibling !== finance) driver.insertAdjacentElement('afterend', finance);
+    if (finance && housing && finance.nextElementSibling !== housing) finance.insertAdjacentElement('afterend', housing);
+  }
+
+  function installIntegrityAlert() {
+    if ($('v66IntegrityAlert')) return;
+    const top = document.querySelector('.top'); if (!top) return;
+    const alert = document.createElement('div');
+    alert.id='v66IntegrityAlert'; alert.className='v66-integrity-alert'; alert.hidden=true;
+    alert.innerHTML='<b id="v66IntegrityTitle">Simulation paused</b><span id="v66IntegrityMessage"></span>';
+    top.insertAdjacentElement('afterend',alert);
+    if(!$('v66PolishStyle')){
+      const style=document.createElement('style');style.id='v66PolishStyle';style.textContent='.v66-integrity-alert{margin:-5px 0 14px;padding:11px 13px;border:1px solid color-mix(in srgb,var(--bad) 35%,var(--border));border-left:4px solid var(--bad);border-radius:12px;background:color-mix(in srgb,var(--bad) 6%,var(--panel));display:flex;gap:9px;align-items:baseline;flex-wrap:wrap}.v66-integrity-alert[hidden]{display:none!important}.v66-integrity-alert span{color:var(--muted);font-size:.83rem}.v66-politics-view>.control-section{border:1px solid var(--border);border-radius:13px;padding:12px;background:var(--panel-2)}';document.head.appendChild(style);
+    }
+  }
+
+  function renderIntegrityAlert() {
+    installIntegrityAlert();
+    const alert=$('v66IntegrityAlert'); if(!alert)return;
+    if(!modelHalted){alert.hidden=true;return;}
+    alert.hidden=false;
+    const runtime = lastRuntimeError;
+    const problems = lastInvariantProblems?.length ? lastInvariantProblems : collectRunChecks();
+    if(runtime){$('v66IntegrityTitle').textContent='Runtime error';$('v66IntegrityMessage').textContent=String(runtime.message||runtime);}
+    else {$('v66IntegrityTitle').textContent='Integrity check paused the simulation';$('v66IntegrityMessage').textContent=problems.length?problems.join(' · '):'An internal consistency check failed.';}
+    if($('runStatus'))$('runStatus').textContent=runtime?'Paused: runtime error':`Paused: ${problems[0]||'integrity check failed'}`;
+  }
+
+  draw = function(s) {
+    const out=priorDraw(s);
+    installPageOrder();
+    renderIntegrityAlert();
+    return out;
+  };
+
+  installPageOrder();
+  installIntegrityAlert();
+})();
+/* SimFlation v66: make the elected second chamber a genuine second voter ballot. */
+(() => {
+  'use strict';
+  if (globalThis.__SIMFLATION_V66_UPPER_BALLOT__) return;
+  globalThis.__SIMFLATION_V66_UPPER_BALLOT__ = true;
+
+  const priorSimulateElectionCore = simulateElectionCore;
+
+  function upperVoteShares(votes){
+    const total=Math.max(1,sum(Object.values(votes||{})));
+    return Object.fromEntries(Object.entries(votes||{}).map(([party,count])=>[party,Number(count||0)/total*100]));
+  }
+  function upperSeats(votes,size){
+    const keys=Object.keys(votes||{}).filter(p=>Number(votes[p])>0&&politicalParties[p]?.active!==false),seats=Object.fromEntries(Object.keys(votes||{}).map(p=>[p,0]));
+    for(let i=0;i<size&&keys.length;i++){
+      const winner=keys.slice().sort((a,b)=>Number(votes[b])/((seats[b]||0)+1)-Number(votes[a])/((seats[a]||0)+1)||Number(votes[b])-Number(votes[a])||a.localeCompare(b))[0];
+      seats[winner]=(seats[winner]||0)+1;
+    }
+    return seats;
+  }
+  function upperChoice(person,utilities,eligible){
+    const rows=eligible.map(p=>{
+      const base=Number(utilities?.[p]);
+      if(!Number.isFinite(base)||base<=-50)return null;
+      const split=(politicalStaticUnit('v66-upper-split-'+p,person.id,monthIndex)-.5)*.20;
+      return{party:p,score:base+split};
+    }).filter(Boolean);
+    if(!rows.length)return null;
+    const max=Math.max(...rows.map(x=>x.score)),weights=rows.map(x=>Math.exp((x.score-max)*2.35)),total=sum(weights);
+    let draw=politicalStaticUnit('v66-upper-choice',person.id,monthIndex)*Math.max(1e-9,total);
+    for(let i=0;i<rows.length;i++){draw-=weights[i];if(draw<=0)return rows[i].party;}
+    return rows.at(-1).party;
+  }
+  function castUpperBallot(pending){
+    const keys=activePartyKeys(),votes=Object.fromEntries(keys.map(p=>[p,0])),votesByRegion=Object.fromEntries(Object.keys(politicalRegions).map(r=>[r,Object.fromEntries(keys.map(p=>[p,0]))]));
+    let eligibleCount=0,turnedOut=0;
+    const early=String(pending?.reason||'').startsWith('Early')||String(pending?.reason||'').includes('called by the user');
+    for(const person of people){
+      if(person.ageMonths<18*12)continue;
+      const h=householdOfPerson(person);if(!h)continue;
+      const eligible=eligiblePartiesForHousehold(h);if(!eligible.length)continue;
+      eligibleCount++;
+      const personal=personalEconomicScore(h),turnout=clamp(.64+Math.abs(personal)*.075+(early?.025:0),.55,.90);
+      if(politicalStaticUnit('v66-upper-turnout',person.id,monthIndex)>turnout)continue;
+      const utilities=pollingUtilitiesForAdult(h,person,pending?.performance||governmentPerformance(history.at(-1))),choice=upperChoice(person,utilities,eligible);
+      if(!choice)continue;
+      votes[choice]=(votes[choice]||0)+1;
+      const region=h.region||'england';if(!votesByRegion[region])votesByRegion[region]=Object.fromEntries(keys.map(p=>[p,0]));
+      votesByRegion[region][choice]=(votesByRegion[region][choice]||0)+1;
+      turnedOut++;
+    }
+    return{votes,votesByRegion,eligible:eligibleCount,turnedOut};
+  }
+  function moveManagedVotes(underlying,incumbent,uplift,level){
+    const raw={...underlying},total=sum(Object.values(raw)),baseVotes=Number(raw[incumbent]||0),audit=globalThis.__simflationV66Audit;
+    if(!incumbent||!baseVotes||!total||!audit?.managedUpliftValid?.(uplift,level))return{raw,advantage:null};
+    const baseShare=baseVotes/total*100,targetShare=clamp(baseShare*(1+uplift),baseShare,99),needed=Math.min(total-baseVotes,Math.max(0,Math.round(total*targetShare/100)-baseVotes));
+    const donors=Object.entries(raw).filter(([p,v])=>p!==incumbent&&v>0),donorTotal=sum(donors.map(([,v])=>v));
+    let left=needed,moved=0;
+    const plan=donors.map(([party,votes])=>({party,votes,exact:donorTotal?needed*votes/donorTotal:0}));
+    for(const item of plan){const n=Math.min(item.votes,Math.floor(item.exact));raw[item.party]-=n;left-=n;moved+=n;item.remainder=item.exact-Math.floor(item.exact)}
+    plan.sort((a,b)=>b.remainder-a.remainder||b.votes-a.votes||a.party.localeCompare(b.party));
+    let guard=0;for(let i=0;left>0&&plan.length&&guard<needed*3+100;i=(i+1)%plan.length,guard++){const item=plan[i];if(raw[item.party]<=0)continue;raw[item.party]--;left--;moved++}
+    raw[incumbent]=baseVotes+moved;
+    const actualShare=raw[incumbent]/total*100;
+    return{raw,advantage:{level,uplift,baseShare,targetShare,actualShare,actualUplift:baseShare?actualShare/baseShare-1:0,flipped:moved}};
+  }
+  function refreshUpperModal(result){
+    const u=result?.secondChamberResult;if(!u)return;
+    let box=$('electionModalContent')?.querySelector('.v66-upper-election-detail');
+    if(!box&&$('electionModalContent')){box=document.createElement('div');box.className='v66-upper-election-detail';$('electionModalContent').querySelector('.election-actions')?.insertAdjacentElement('beforebegin',box);}
+    if(!box)return;
+    const parties=Object.keys(u.rawVotes||{}).sort((a,b)=>(u.voteShares?.[b]||0)-(u.voteShares?.[a]||0));
+    const rows=parties.filter(p=>(u.rawVotes[p]||0)>0||(u.seats[p]||0)>0).map(p=>`<tr><td>${politicalParties[p]?.label||p}</td><td>${Number(u.rawVotes[p]||0).toLocaleString('en-GB')}</td><td>${Number(u.voteShares?.[p]||0).toFixed(1)}%</td>${u.managedElection?`<td>${Number(u.underlyingVoteShares?.[p]||0).toFixed(1)}%</td>`:''}<td>${Number(u.seats[p]||0)}</td></tr>`).join('');
+    box.innerHTML=`<h4>Second-chamber vote</h4><div class="v66-upper-meta"><span>${u.electoralSystem}</span><span>${Number(u.turnoutVotes||0).toLocaleString('en-GB')} votes · ${Number(u.turnout||0).toFixed(1)}% turnout</span>${u.managedElection?`<span>${u.managedLevelAtCall} managed election · underlying vote retained</span>`:''}</div><div class="table-wrap"><table class="election-result-table"><thead><tr><th>Party</th><th>Votes</th><th>Official vote</th>${u.managedElection?'<th>Underlying vote</th>':''}<th>Seats</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  function updateSecondChamberSystem(result,upper){
+    const current=politics.secondChamberSystem||{history:[]},history=current.history||[];
+    let entry=history.slice().reverse().find(x=>x.index===result.index&&x.type==='elected');
+    if(!entry){entry={index:result.index,date:result.date,type:'elected',size:upper.size,seats:{...upper.seats},reason:'Second-chamber election held alongside the general election'};history.push(entry);}
+    Object.assign(entry,JSON.parse(JSON.stringify(upper)),{index:result.index,date:result.date,type:'elected',reason:'Second-chamber election held alongside the general election'});
+    politics.secondChamberSystem={...current,type:'elected',size:upper.size,seats:{...upper.seats},lastElectionIndex:result.index,history};
+  }
+
+  simulateElectionCore=function(...args){
+    const pending=politics?.pendingElection,shouldBallot=!!pending&&!pending.results&&!pending.presidentialOnly&&politics?.constitution?.secondChamber==='elected'&&['competitive','managed'].includes(politics?.constitution?.elections||'competitive');
+    const levelAtCall=shouldBallot&&politics.constitution.elections==='managed'?(politics.constitution.managedElectionLevel||'standard'):null;
+    const incumbentAtCall=shouldBallot?politics.leadParty:null;
+    let upperUnderlying=null;
+    if(shouldBallot)upperUnderlying=castUpperBallot(pending);
+    const before=politics?.electionHistory?.length||0;
+    const out=priorSimulateElectionCore(...args);
+    if(!upperUnderlying||(politics?.electionHistory?.length||0)<=before)return out;
+    const result=politics.electionHistory.at(-1);if(!result||result.type!=='election')return out;
+    const existing=result.secondChamberResult||{size:Number(politics.constitution.secondChamberSize||15),seats:{},electionStatusAtCall:result.electionStatusAtCall||politics.constitution.elections};
+    const underlyingRawVotes={...upperUnderlying.votes},managed=!!result.managedElection,uplift=Number(result.managedAdvantage?.uplift||0),applied=managed?moveManagedVotes(underlyingRawVotes,incumbentAtCall,uplift,levelAtCall):{raw:{...underlyingRawVotes},advantage:null},rawVotes=applied.raw,size=Number(existing.size||politics.constitution.secondChamberSize||15),seats=upperSeats(rawVotes,size);
+    result.secondChamberResult={...existing,v66DetailedBallot:true,independentAgentBallot:true,electoralSystem:'National proportional ballot (D’Hondt)',electorate:upperUnderlying.eligible,turnoutVotes:upperUnderlying.turnedOut,turnout:upperUnderlying.turnedOut/Math.max(1,upperUnderlying.eligible)*100,rawVotes,voteShares:upperVoteShares(rawVotes),underlyingRawVotes,underlyingVoteShares:upperVoteShares(underlyingRawVotes),rawRegionalVotes:upperUnderlying.votesByRegion,seats,managedElection:managed,managedLevelAtCall:levelAtCall,managedAdvantage:applied.advantage};
+    updateSecondChamberSystem(result,result.secondChamberResult);
+    refreshUpperModal(result);
+    return out;
+  };
+
+  function installConstitutionExtraCapture(){
+    const button=$('applyConstitution');if(!button||button.dataset.v66ExtraCapture)return;button.dataset.v66ExtraCapture='1';
+    button.addEventListener('click',()=>{
+      const before=globalThis.__simflationV65Politics?.state?.()||{},desired={
+        votersPerMP:clamp(Math.round(Number($('constitutionVotersPerMP')?.value)||10),2,100),
+        secondChamberSize:clamp(Math.round(Number($('constitutionSecondChamberSize')?.value)||15),10,300),
+        managedElectionLevel:['light','standard','heavy','extreme'].includes($('constitutionManagedLevel')?.value)?$('constitutionManagedLevel').value:'standard',
+        secondChamber:$('constitutionSecondChamber')?.value||politics?.constitution?.secondChamber||'lords'
+      };
+      const beforeSize=Number(before.secondChamber?.size||politics?.constitution?.secondChamberSize||15),beforeType=before.secondChamber?.type||politics?.constitution?.secondChamber;
+      if(desired.votersPerMP===Number(before.votersPerMP||10)&&desired.secondChamberSize===beforeSize&&desired.managedElectionLevel===(before.managedElectionLevel||'standard')&&desired.secondChamber===beforeType)return;
+      queueMicrotask(()=>{
+        const c=politics?.constitution;if(!c)return;
+        const oldRatio=Number(c.votersPerMP||10),oldSize=Number(c.secondChamberSize||15),oldType=politics.secondChamberSystem?.type||c.secondChamber;
+        c.votersPerMP=desired.votersPerMP;c.secondChamberSize=desired.secondChamberSize;c.managedElectionLevel=desired.managedElectionLevel;c.secondChamber=desired.secondChamber;
+        if(c.votersPerMP!==oldRatio&&typeof globalThis.__simflationV65RunCensus==='function')globalThis.__simflationV65RunCensus(false);
+        if(c.secondChamber!==oldType||c.secondChamberSize!==oldSize){
+          const priorHistory=politics.secondChamberSystem?.history||[];
+          let seats=null;if(c.secondChamber==='elected'){const support=politics.lastElectionVoteShares&&sum(Object.values(politics.lastElectionVoteShares))>0?politics.lastElectionVoteShares:politics.partyPolling;seats=globalThis.__simflationV65Politics?.allocateSecondChamber?.(support||{},c.secondChamberSize)||null;}
+          politics.secondChamberSystem={type:c.secondChamber,size:c.secondChamber==='none'?0:c.secondChamberSize,seats,lastElectionIndex:c.secondChamber==='elected'?monthIndex:null,history:[...priorHistory,{index:monthIndex,date:date().label,type:c.secondChamber,size:c.secondChamber==='none'?0:c.secondChamberSize,seats:seats?{...seats}:null,reason:'Constitutional reform'}]};
+        }
+        if(history.at(-1))renderPolitics(history.at(-1));
+      });
+    },true);
+  }
+
+  installConstitutionExtraCapture();
+})();
 /* SIMFLATION_V61_CALIBRATION_START */
 (() => {
   const V61 = {
@@ -5787,8 +6479,8 @@ reset = function(...args) {
 ;(()=>{
   const legacy=window.__simflationV62;
   if(!legacy)return;
-  window.__simflationV65={...legacy,version:'0.8.0',releaseVersion:'0.8.0',modelVersion:'v65'};
-  window.__simflationCurrent=window.__simflationV65;
+  window.__simflationV66={...legacy,version:'0.9.0',releaseVersion:'0.9.0',modelVersion:'v66'};
+  window.__simflationCurrent=window.__simflationV66;
 })();
 </script>
 
