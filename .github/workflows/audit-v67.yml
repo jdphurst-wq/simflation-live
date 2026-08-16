@@ -36,7 +36,12 @@ jobs:
               new = 'async function runBatchAudit(seedCount=4,months=120)'
               if text.count(old) != 1:
                   raise SystemExit(f'Expected one batch-audit default in {source}, found {text.count(old)}')
-              Path(target).write_text(text.replace(old, new))
+              text = text.replace(old, new)
+              old_results = "batchAuditResults={format:'agent-based-economy-batch-audit'"
+              new_results = "batchAuditResults=window.__auditResults={format:'agent-based-economy-batch-audit'"
+              if text.count(old_results) != 1:
+                  raise SystemExit(f'Expected one audit-results assignment in {source}, found {text.count(old_results)}')
+              Path(target).write_text(text.replace(old_results, new_results))
           PY
       - name: Start local simulator server
         run: python3 -m http.server 8000 >/tmp/simflation-http.log 2>&1 &
