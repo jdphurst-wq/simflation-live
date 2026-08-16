@@ -26,7 +26,7 @@ async function auditPage(browser, path) {
     const status = document.getElementById('batchAuditStatus');
     const text = status?.textContent || '';
     return /Audit complete|could not be completed/i.test(text);
-  }, { timeout: 180000 });
+  }, null, { timeout: 240000 });
 
   const status = await page.locator('#batchAuditStatus').innerText();
   const text = await page.locator('#batchAuditResults').innerText();
