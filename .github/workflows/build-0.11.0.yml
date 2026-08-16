@@ -45,17 +45,22 @@ jobs:
           if marker not in lines:
               raise SystemExit('Missing public-capital patch marker')
           i = lines.index(marker)
-          old_target = '  "}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",'
-          old_replacement = '  "}const publicClaim=Math.max(0,bank.publicResolutionEquity||0);if(publicClaim>0){const publicRecovery=Math.min(publicClaim,Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)*.30,Math.max(0,bank.reserves-reserveTarget)*.30);if(publicRecovery>0){bank.reserves-=publicRecovery;bank.publicResolutionEquity=Math.max(0,publicClaim-publicRecovery);world.centralBankResolutionRecoveries=(world.centralBankResolutionRecoveries||0)+publicRecovery}}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)"'
-          if lines[i+1] == old_target:
+          if lines[i+1] == '  "}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",':
               lines[i+1] = '  "      const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",'
-          if lines[i+2] == old_replacement:
-              lines[i+2] = '  "      const publicClaim=Math.max(0,bank.publicResolutionEquity||0);if(publicClaim>0){const publicRecovery=Math.min(publicClaim,Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)*.30,Math.max(0,bank.reserves-reserveTarget)*.30);if(publicRecovery>0){bank.reserves-=publicRecovery;bank.publicResolutionEquity=Math.max(0,publicClaim-publicRecovery);world.centralBankResolutionRecoveries=(world.centralBankResolutionRecoveries||0)+publicRecovery}}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)"'
+          if lines[i+2].startswith('  "}const publicClaim='):
+              lines[i+2] = lines[i+2].replace('  "}const publicClaim=', '  "      const publicClaim=', 1)
           s = '\n'.join(lines) + '\n'
+          s = s.replace(
+              'classCounts=Object.fromEntries(Object.keys(classLabels).map(k=>[k,Object.values(classes).filter(v=>v===k).length));return{',
+              'classCounts=Object.fromEntries(Object.keys(classLabels).map(k=>[k,Object.values(classes).filter(v=>v===k).length]));return{',
+              1,
+          )
           if '  "(() => {\\n  \'use strict\';\\n  const elementCache=new Map(),",' not in s:
               raise SystemExit('Main-model anchor was not normalised')
           if '  "      const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",' not in s:
               raise SystemExit('Public-capital dividend target was not normalised')
+          if 'classCounts=Object.fromEntries(Object.keys(classLabels).map(k=>[k,Object.values(classes).filter(v=>v===k).length]));return{' not in s:
+              raise SystemExit('Bulk-wealth syntax was not normalised')
           p.write_text(s)
           PY
       - name: Build 0.11.0
