@@ -24,6 +24,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Narrow the main-model build anchor
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/build-0.11.0.mjs')
+          s = p.read_text()
+          old = '  "(() => {\\n  \'use strict\';\\n",\n'
+          new = '  "(() => {\\n  \'use strict\';\\n  const elementCache=new Map(),",\n'
+          if old in s:
+              s = s.replace(old, new, 1)
+          old2 = '    const n=Math.max(1,households.length);v011MigrationStats={recentShare:recent/n*100,foreignShare:foreign/n*100,descendantShare:descendant/n*100,highSkillShare:foreign?highSkill/foreign*100:0};v011MigrationStatsMonth=monthIndex;return v011MigrationStats\\n  }\\n`\n);'
+          new2 = '    const n=Math.max(1,households.length);v011MigrationStats={recentShare:recent/n*100,foreignShare:foreign/n*100,descendantShare:descendant/n*100,highSkillShare:foreign?highSkill/foreign*100:0};v011MigrationStatsMonth=monthIndex;return v011MigrationStats\\n  }\\n  const elementCache=new Map(),`\n);'
+          if old2 in s:
+              s = s.replace(old2, new2, 1)
+          if '  "(() => {\\n  \'use strict\';\\n  const elementCache=new Map(),",' not in s or '  const elementCache=new Map(),`\n);' not in s:
+              raise SystemExit('Could not establish the unique main-model 0.11.0 build anchor')
+          p.write_text(s)
+          PY
       - name: Build 0.11.0
         run: node scripts/build-0.11.0.mjs
       - name: Verify generated release identity
@@ -44,7 +62,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add SimFlation-0.11.0.html index.html version.json
+          git add scripts/build-0.11.0.mjs SimFlation-0.11.0.html index.html version.json
           if git diff --cached --quiet; then
             echo "Generated files already current."
             exit 0
