@@ -30,27 +30,32 @@ jobs:
           from pathlib import Path
           p = Path('scripts/build-0.11.0.mjs')
           s = p.read_text()
-
-          old = '  "(() => {\\n  \'use strict\';\\n",\n'
-          new = '  "(() => {\\n  \'use strict\';\\n  const elementCache=new Map(),",\n'
-          if old in s:
-              s = s.replace(old, new, 1)
-          old2 = '    const n=Math.max(1,households.length);v011MigrationStats={recentShare:recent/n*100,foreignShare:foreign/n*100,descendantShare:descendant/n*100,highSkillShare:foreign?highSkill/foreign*100:0};v011MigrationStatsMonth=monthIndex;return v011MigrationStats\\n  }\\n`\n);'
-          new2 = '    const n=Math.max(1,households.length);v011MigrationStats={recentShare:recent/n*100,foreignShare:foreign/n*100,descendantShare:descendant/n*100,highSkillShare:foreign?highSkill/foreign*100:0};v011MigrationStatsMonth=monthIndex;return v011MigrationStats\\n  }\\n  const elementCache=new Map(),`\n);'
-          if old2 in s:
-              s = s.replace(old2, new2, 1)
-
-          old3 = '''  "}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",
-  "}const publicClaim=Math.max(0,bank.publicResolutionEquity||0);if(publicClaim>0){const publicRecovery=Math.min(publicClaim,Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)*.30,Math.max(0,bank.reserves-reserveTarget)*.30);if(publicRecovery>0){bank.reserves-=publicRecovery;bank.publicResolutionEquity=Math.max(0,publicClaim-publicRecovery);world.centralBankResolutionRecoveries=(world.centralBankResolutionRecoveries||0)+publicRecovery}}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)"'''
-          new3 = '''  "      const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",
-  "      const publicClaim=Math.max(0,bank.publicResolutionEquity||0);if(publicClaim>0){const publicRecovery=Math.min(publicClaim,Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)*.30,Math.max(0,bank.reserves-reserveTarget)*.30);if(publicRecovery>0){bank.reserves-=publicRecovery;bank.publicResolutionEquity=Math.max(0,publicClaim-publicRecovery);world.centralBankResolutionRecoveries=(world.centralBankResolutionRecoveries||0)+publicRecovery}}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)"'''
-          if old3 in s:
-              s = s.replace(old3, new3, 1)
-
-          if '  "(() => {\\n  \'use strict\';\\n  const elementCache=new Map(),",' not in s or '  const elementCache=new Map(),`\n);' not in s:
-              raise SystemExit('Could not establish the unique main-model 0.11.0 build anchor')
+          s = s.replace(
+              '  "(() => {\\n  \'use strict\';\\n",\n',
+              '  "(() => {\\n  \'use strict\';\\n  const elementCache=new Map(),",\n',
+              1,
+          )
+          s = s.replace(
+              '    const n=Math.max(1,households.length);v011MigrationStats={recentShare:recent/n*100,foreignShare:foreign/n*100,descendantShare:descendant/n*100,highSkillShare:foreign?highSkill/foreign*100:0};v011MigrationStatsMonth=monthIndex;return v011MigrationStats\\n  }\\n`\n);',
+              '    const n=Math.max(1,households.length);v011MigrationStats={recentShare:recent/n*100,foreignShare:foreign/n*100,descendantShare:descendant/n*100,highSkillShare:foreign?highSkill/foreign*100:0};v011MigrationStatsMonth=monthIndex;return v011MigrationStats\\n  }\\n  const elementCache=new Map(),`\n);',
+              1,
+          )
+          lines = s.splitlines()
+          marker = "  'public capital recovers before private bank dividends',"
+          if marker not in lines:
+              raise SystemExit('Missing public-capital patch marker')
+          i = lines.index(marker)
+          old_target = '  "}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",'
+          old_replacement = '  "}const publicClaim=Math.max(0,bank.publicResolutionEquity||0);if(publicClaim>0){const publicRecovery=Math.min(publicClaim,Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)*.30,Math.max(0,bank.reserves-reserveTarget)*.30);if(publicRecovery>0){bank.reserves-=publicRecovery;bank.publicResolutionEquity=Math.max(0,publicClaim-publicRecovery);world.centralBankResolutionRecoveries=(world.centralBankResolutionRecoveries||0)+publicRecovery}}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)"'
+          if lines[i+1] == old_target:
+              lines[i+1] = '  "      const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",'
+          if lines[i+2] == old_replacement:
+              lines[i+2] = '  "      const publicClaim=Math.max(0,bank.publicResolutionEquity||0);if(publicClaim>0){const publicRecovery=Math.min(publicClaim,Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)*.30,Math.max(0,bank.reserves-reserveTarget)*.30);if(publicRecovery>0){bank.reserves-=publicRecovery;bank.publicResolutionEquity=Math.max(0,publicClaim-publicRecovery);world.centralBankResolutionRecoveries=(world.centralBankResolutionRecoveries||0)+publicRecovery}}const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)"'
+          s = '\n'.join(lines) + '\n'
+          if '  "(() => {\\n  \'use strict\';\\n  const elementCache=new Map(),",' not in s:
+              raise SystemExit('Main-model anchor was not normalised')
           if '  "      const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",' not in s:
-              raise SystemExit('Could not establish the 0.11.0 public-capital dividend target')
+              raise SystemExit('Public-capital dividend target was not normalised')
           p.write_text(s)
           PY
       - name: Build 0.11.0
