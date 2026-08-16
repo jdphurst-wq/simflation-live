@@ -1,0 +1,29 @@
+name: Audit SimFlation v67 banking
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/audit-v67-browser.cjs'
+      - '.github/workflows/audit-v67.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install browser driver
+        run: npm install --no-save playwright-core
+      - name: Start local simulator server
+        run: python3 -m http.server 8000 >/tmp/simflation-http.log 2>&1 &
+      - name: Run repeated banking audit
+        run: node scripts/audit-v67-browser.cjs
