@@ -6,12 +6,22 @@ async function auditPage(browser, path) {
   page.on('pageerror', error => pageErrors.push(String(error && error.stack || error)));
   await page.goto(`http://127.0.0.1:8000/${path}`, { waitUntil: 'load', timeout: 60000 });
 
-  await page.locator('#capitalRequirement').fill('10');
-  await page.locator('#bankPolicy').selectOption('resolve');
-  await page.locator('#seed').fill('42');
+  await page.evaluate(() => {
+    const set = (id, value) => {
+      const el = document.getElementById(id);
+      if (!el) throw new Error(`Missing control ${id}`);
+      el.value = String(value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    set('capitalRequirement', 10);
+    set('bankPolicy', 'resolve');
+    set('seed', 42);
+    const audit = document.getElementById('runAuditSuite');
+    if (!audit) throw new Error('Missing runAuditSuite button');
+    audit.click();
+  });
 
-  const auditButton = page.locator('#runAuditSuite');
-  await auditButton.click();
   await page.waitForFunction(() => {
     const status = document.getElementById('batchAuditStatus');
     const text = status?.textContent || '';
