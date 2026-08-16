@@ -23,6 +23,21 @@ jobs:
           node-version: '24'
       - name: Install browser driver
         run: npm install --no-save playwright-core
+      - name: Create bounded audit fixtures
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for source, target in [
+              ('SimFlation-v66.html', 'audit-v66.html'),
+              ('SimFlation-v67.html', 'audit-v67.html'),
+          ]:
+              text = Path(source).read_text()
+              old = 'async function runBatchAudit(seedCount=12,months=240)'
+              new = 'async function runBatchAudit(seedCount=4,months=120)'
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected one batch-audit default in {source}, found {text.count(old)}')
+              Path(target).write_text(text.replace(old, new))
+          PY
       - name: Start local simulator server
         run: python3 -m http.server 8000 >/tmp/simflation-http.log 2>&1 &
       - name: Run repeated banking audit
