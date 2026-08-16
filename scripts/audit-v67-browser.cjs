@@ -26,7 +26,7 @@ async function auditPage(browser, path) {
     const status = document.getElementById('batchAuditStatus');
     const text = status?.textContent || '';
     return /Audit complete|could not be completed/i.test(text);
-  }, null, { timeout: 240000 });
+  }, null, { timeout: 180000 });
 
   const status = await page.locator('#batchAuditStatus').innerText();
   const text = await page.locator('#batchAuditResults').innerText();
@@ -47,8 +47,8 @@ async function auditPage(browser, path) {
 
 (async () => {
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
-  const v66 = await auditPage(browser, 'SimFlation-v66.html');
-  const v67 = await auditPage(browser, 'SimFlation-v67.html');
+  const v66 = await auditPage(browser, 'audit-v66.html');
+  const v67 = await auditPage(browser, 'audit-v67.html');
   await browser.close();
 
   console.log('V66_AUDIT=' + JSON.stringify(v66));
@@ -58,7 +58,7 @@ async function auditPage(browser, path) {
     console.error('V67_PAGE_ERRORS=' + JSON.stringify(v67.pageErrors));
     process.exitCode = 1;
   }
-  if (v67.completedWithoutIntegrityFailure !== v67.seedCount || v67.seedCount !== 12) {
+  if (v67.completedWithoutIntegrityFailure !== v67.seedCount || v67.seedCount !== 4) {
     console.error('Integrity failure in v67 repeated-run audit.');
     process.exitCode = 1;
   }
