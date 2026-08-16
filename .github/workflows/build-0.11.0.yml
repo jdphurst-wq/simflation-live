@@ -1,0 +1,53 @@
+name: Build and audit SimFlation 0.11.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-0.11.0.mjs'
+      - 'scripts/audit-0.11.0-browser.cjs'
+      - 'SimFlation-0.10.0.html'
+      - '.github/workflows/build-0.11.0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-audit-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build 0.11.0
+        run: node scripts/build-0.11.0.mjs
+      - name: Verify generated release identity
+        run: |
+          cmp -s SimFlation-0.11.0.html index.html
+          grep -q '"version": "0.11.0"' version.json
+          grep -q '"modelVersion": "0.11.0"' version.json
+          grep -q '<title>SimFlation 0.11.0</title>' index.html
+          grep -q 'edition-badge">0.11.0<' index.html
+          grep -q 'SIMFLATION_0_11_0_RUNTIME_START' index.html
+      - name: Install browser driver
+        run: npm install --no-save playwright-core
+      - name: Start local simulator server
+        run: python3 -m http.server 8000 >/tmp/simflation-http.log 2>&1 &
+      - name: Run repeated, performance and 100-year banking audits
+        run: node scripts/audit-0.11.0-browser.cjs
+      - name: Commit audited 0.11.0 release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add SimFlation-0.11.0.html index.html version.json
+          if git diff --cached --quiet; then
+            echo "Generated files already current."
+            exit 0
+          fi
+          git commit -m "Release SimFlation 0.11.0"
+          git push
