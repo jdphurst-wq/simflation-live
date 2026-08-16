@@ -30,6 +30,7 @@ async function auditPage(browser, path) {
 
   const status = await page.locator('#batchAuditStatus').innerText();
   const text = await page.locator('#batchAuditResults').innerText();
+  const details = await page.evaluate(() => window.__auditResults || null);
   const completion = text.match(/(\d+) of (\d+) seeds completed with no integrity failure/i);
   const failureMatch = text.match(/([\d,]+) bank failures occurred across all runs/i);
   const result = {
@@ -39,6 +40,15 @@ async function auditPage(browser, path) {
     completedWithoutIntegrityFailure: completion ? Number(completion[1]) : null,
     seedCount: completion ? Number(completion[2]) : null,
     bankFailures: failureMatch ? Number(failureMatch[1].replace(/,/g, '')) : null,
+    seedDiagnostics: details?.seeds?.map(row => ({
+      seed: row.seed,
+      monthsCompleted: row.monthsCompleted,
+      halted: row.halted,
+      problems: row.problems,
+      bankFailures: row.final?.bankFailures,
+      bankDiagnostics: row.diagnostics?.banks,
+      lastResolutions: row.diagnostics?.lastResolutions
+    })) || null,
     pageErrors
   };
   await page.close();
