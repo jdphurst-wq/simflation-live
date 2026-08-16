@@ -40,6 +40,11 @@ jobs:
               '    const n=Math.max(1,households.length);v011MigrationStats={recentShare:recent/n*100,foreignShare:foreign/n*100,descendantShare:descendant/n*100,highSkillShare:foreign?highSkill/foreign*100:0};v011MigrationStatsMonth=monthIndex;return v011MigrationStats\\n  }\\n  const elementCache=new Map(),`\n);',
               1,
           )
+          s = s.replace(
+              '  function minimumBankCount(){return households.length>=250?4:households.length>=100?3:households.length>=25?2:1}\\n',
+              '  function minimumBankCount(){return households.length>=250?4:households.length>=100?3:households.length>=25?2:1}\\n  function preferredBankCount(){return households.length>=250?6:households.length>=100?4:households.length>=25?3:1}\\n',
+              1,
+          )
           lines = s.splitlines()
           marker = "  'public capital recovers before private bank dividends',"
           if marker not in lines:
@@ -55,12 +60,39 @@ jobs:
               'classCounts=Object.fromEntries(Object.keys(classLabels).map(k=>[k,Object.values(classes).filter(v=>v===k).length]));return{',
               1,
           )
-          if '  "(() => {\\n  \'use strict\';\\n  const elementCache=new Map(),",' not in s:
-              raise SystemExit('Main-model anchor was not normalised')
-          if '  "      const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",' not in s:
-              raise SystemExit('Public-capital dividend target was not normalised')
-          if 'classCounts=Object.fromEntries(Object.keys(classLabels).map(k=>[k,Object.values(classes).filter(v=>v===k).length]));return{' not in s:
-              raise SystemExit('Bulk-wealth syntax was not normalised')
+          s = s.replace(
+              '"-recentFailurePenalty*.35-minimumScalePenalty+Math.max(0,minimumBankCount()-banksNow.length)*.012,0,.06)"',
+              '"-recentFailurePenalty*.20-minimumScalePenalty*.20+Math.max(0,preferredBankCount()-banksNow.length)*.025+Math.max(0,concentration-.24)*.025,0,.09)"',
+              1,
+          )
+          entry_anchor = "replaceAllChecked(\n  'shared minimum bank rule',"
+          entry_patch = """replaceOnce(
+  'private bank entry capital target',
+  'Math.max(300000*nominalScale(),annualGDPReference()*.006)',
+  'Math.max(220000*nominalScale(),annualGDPReference()*.0045)'
+);
+replaceOnce(
+  'private bank entry viability threshold',
+  'raised>=target*.95&&raised>=Math.max(250000*nominalScale(),annualGDPReference()*.005)',
+  'raised>=target*.90&&raised>=Math.max(180000*nominalScale(),annualGDPReference()*.0035)'
+);
+
+"""
+          if "'private bank entry capital target'" not in s:
+              if entry_anchor not in s:
+                  raise SystemExit('Missing private-bank entry insertion point')
+              s = s.replace(entry_anchor, entry_patch + entry_anchor, 1)
+          required = [
+              '  "(() => {\\n  \'use strict\';\\n  const elementCache=new Map(),",',
+              '  "      const remainingExcess=Math.max(0,bankEquity(bank)-bankRWA(bank)*dividendTarget)",',
+              'classCounts=Object.fromEntries(Object.keys(classLabels).map(k=>[k,Object.values(classes).filter(v=>v===k).length]));return{',
+              'function preferredBankCount()',
+              "'private bank entry capital target'",
+              'preferredBankCount()-banksNow.length',
+          ]
+          missing = [x for x in required if x not in s]
+          if missing:
+              raise SystemExit('0.11.0 normalisation incomplete: ' + repr(missing))
           p.write_text(s)
           PY
       - name: Build 0.11.0
