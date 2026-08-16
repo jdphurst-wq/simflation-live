@@ -128,7 +128,7 @@ replaceOnce(
 html = html.replace('/* SimFlation v66 stability, performance, election-detail and interface upgrade. */', '/* SimFlation v67 banking stability build, based on the v66 interface/performance release. */\n/* SimFlation v66 stability, performance, election-detail and interface upgrade. */');
 
 // Static parse check every inline script before publishing the generated build.
-const scripts = [...html.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)].map(m => m[1]);
+const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
 for (let i = 0; i < scripts.length; i++) new vm.Script(scripts[i], {filename:`SimFlation-v67-inline-${i + 1}.js`});
 
 const version = {
