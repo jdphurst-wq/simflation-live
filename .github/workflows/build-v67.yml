@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/build-v67.mjs'
+      - 'scripts/fix-build-v67.mjs'
       - 'SimFlation-v66.html'
       - '.github/workflows/build-v67.yml'
   workflow_dispatch:
@@ -22,6 +23,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Repair build parser
+        run: node scripts/fix-build-v67.mjs
       - name: Build v67
         run: node scripts/build-v67.mjs
       - name: Verify canonical files
@@ -33,7 +36,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add SimFlation-v67.html SimFlation-0.9.0.html index.html version.json
+          git add scripts/build-v67.mjs SimFlation-v67.html SimFlation-0.9.0.html index.html version.json
           if git diff --cached --quiet; then
             echo "Generated files already current."
             exit 0
