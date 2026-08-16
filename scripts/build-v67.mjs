@@ -123,25 +123,30 @@ replaceLine(
 replaceOnce(
   'current model pointer',
   "  window.__simflationV66={...legacy,version:'0.9.0',releaseVersion:'0.9.0',modelVersion:'v66'};\n  window.__simflationCurrent=window.__simflationV66;",
-  "  window.__simflationV66={...legacy,version:'0.9.0',releaseVersion:'0.9.0',modelVersion:'v66'};\n  window.__simflationV67={...window.__simflationV66,modelVersion:'v67'};\n  window.__simflationCurrent=window.__simflationV67;"
+  "  window.__simflationV66={...legacy,version:'0.9.0',releaseVersion:'0.9.0',modelVersion:'v66'};\n  window.__simflationV67={...window.__simflationV66,version:'0.10.0',releaseVersion:'0.10.0',modelVersion:'v67'};\n  window.__simflationCurrent=window.__simflationV67;"
 );
 html = html.replace('/* SimFlation v66 stability, performance, election-detail and interface upgrade. */', '/* SimFlation v67 banking stability build, based on the v66 interface/performance release. */\n/* SimFlation v66 stability, performance, election-detail and interface upgrade. */');
+
+// 10a. Public release identity for SimFlation 0.10.0.
+html = html.replace('<title>SimFlation 0.9.0</title>', '<title>SimFlation 0.10.0</title>');
+html = html.replace('<h1>SimFlation</h1><span class="edition-badge">0.9.0</span>', '<h1>SimFlation</h1><span class="edition-badge">0.10.0</span>');
+html = html.replace("current.releaseVersion || '0.9.0'", "current.releaseVersion || '0.10.0'");
 
 // Static parse check every inline script before publishing the generated build.
 const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
 for (let i = 0; i < scripts.length; i++) new vm.Script(scripts[i], {filename:`SimFlation-v67-inline-${i + 1}.js`});
 
 const version = {
-  version: '0.9.0',
-  label: '0.9.0',
+  version: '0.10.0',
+  label: '0.10.0',
   modelVersion: 'v67',
-  standalone: 'SimFlation-0.9.0.html',
+  standalone: 'SimFlation-0.10.0.html',
   modelStandalone: 'SimFlation-v67.html'
 };
 
 fs.writeFileSync(outputPath, html);
 fs.writeFileSync('index.html', html);
-fs.writeFileSync('SimFlation-0.9.0.html', html);
+fs.writeFileSync('SimFlation-0.10.0.html', html);
 fs.writeFileSync('version.json', JSON.stringify(version, null, 2) + '\n');
 
 console.log(`Built ${outputPath}; ${scripts.length} inline scripts parsed successfully.`);

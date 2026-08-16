@@ -1,7 +1,7 @@
 {
-  "version": "0.9.0",
-  "label": "0.9.0",
+  "version": "0.10.0",
+  "label": "0.10.0",
   "modelVersion": "v67",
-  "standalone": "SimFlation-0.9.0.html",
+  "standalone": "SimFlation-0.10.0.html",
   "modelStandalone": "SimFlation-v67.html"
 }
