@@ -1,0 +1,42 @@
+name: Build SimFlation v67
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-v67.mjs'
+      - 'SimFlation-v66.html'
+      - '.github/workflows/build-v67.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build v67
+        run: node scripts/build-v67.mjs
+      - name: Verify canonical files
+        run: |
+          cmp -s SimFlation-v67.html index.html
+          cmp -s SimFlation-v67.html SimFlation-0.9.0.html
+          grep -q '"modelVersion": "v67"' version.json
+      - name: Commit generated v67
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add SimFlation-v67.html SimFlation-0.9.0.html index.html version.json
+          if git diff --cached --quiet; then
+            echo "Generated files already current."
+            exit 0
+          fi
+          git commit -m "Build SimFlation v67 banking stability changes"
+          git push
