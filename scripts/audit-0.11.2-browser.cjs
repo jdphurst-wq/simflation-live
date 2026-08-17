@@ -1,0 +1,30 @@
+const { chromium } = require('playwright-core');
+
+async function load(page,path){await page.goto(`http://127.0.0.1:8000/${path}`,{waitUntil:'load',timeout:60000});await page.waitForFunction(()=>!!window.__sim?.runLongAudit&&!!window.__sim?.runSettlementAudit,null,{timeout:60000})}
+async function set(page,id,value){await page.evaluate(({id,value})=>{const el=document.getElementById(id);if(!el)throw new Error(`Missing control ${id}`);el.value=String(value);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))},{id,value})}
+async function configure(page,seed,policy){await set(page,'capitalRequirement',10);await set(page,'bankPolicy',policy);await set(page,'seed',seed)}
+function assert(condition,message){if(!condition)throw new Error(message)}
+function compact(run){return{seed:run.seed,policy:run.bankPolicy,months:run.monthsCompleted,failures:run.failures,annualFailureRate:run.annualFailureRate,averageBanks:run.averageBanks,oneBankMonths:run.oneBankMonths,maxConsecutiveOneBank:run.maxConsecutiveOneBank,maxBridgeAge:run.maxBridgeAge,privateEntrants:run.successfulPrivateEntrants,governmentSupport:run.governmentSupport,centralBankSolvencySupport:run.centralBankSolvencySupport,outstandingPublicResolutionEquity:run.outstandingPublicResolutionEquity,supportToGDP:run.supportToGDP,maxCreditRatio:run.maxCreditRatio,maxSingleBankCreditRatio:run.maxSingleBankCreditRatio,maxLiquidityUsage:run.maxLiquidityUsage,halted:run.halted,problems:run.problems,firstMonetaryInvariant:run.firstMonetaryInvariant}}
+function validateCore(run,months,{failureLimit,supportRatioLimit,oneBankLimit=18}){
+  assert(run.monthsCompleted===months,`Seed ${run.seed} ${run.bankPolicy} completed ${run.monthsCompleted}/${months} months`);
+  assert(!run.halted,`Seed ${run.seed} ${run.bankPolicy} halted`);assert(!run.problems.length,`Seed ${run.seed} problems: ${JSON.stringify(run.problems)}`);assert(!run.firstMonetaryInvariant,`Seed ${run.seed} monetary invariant: ${JSON.stringify(run.firstMonetaryInvariant)}`);
+  assert(run.failures<=failureLimit,`Seed ${run.seed} produced ${run.failures} bank failures, limit ${failureLimit}`);assert(run.annualFailureRate<=failureLimit/(months/12)+1e-9,`Seed ${run.seed} annual failure rate ${run.annualFailureRate}`);
+  assert(run.maxConsecutiveOneBank<=oneBankLimit,`Seed ${run.seed} had ${run.maxConsecutiveOneBank} consecutive one-bank months`);assert(run.maxBridgeAge<=60,`Seed ${run.seed} bridge age ${run.maxBridgeAge}`);
+  assert(run.centralBankSolvencySupport<=.01,`Seed ${run.seed} used central-bank solvency support ${run.centralBankSolvencySupport}`);assert(run.centralBankBackstop<=.01,`Seed ${run.seed} accumulated legacy central-bank backstop ${run.centralBankBackstop}`);
+  assert(run.supportToGDP<=supportRatioLimit,`Seed ${run.seed} public support/GDP ${run.supportToGDP}`);assert(run.maxCreditRatio<=2.36,`Seed ${run.seed} credit/GDP ${run.maxCreditRatio}`);assert(run.maxSingleBankCreditRatio<=.55,`Seed ${run.seed} single-bank credit/GDP ${run.maxSingleBankCreditRatio}`);assert(run.maxLiquidityUsage<=1.000001,`Seed ${run.seed} exceeded liquidity facility ${run.maxLiquidityUsage}`)
+}
+
+(async()=>{
+  const browser=await chromium.launch({headless:true});const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(String(e&&e.stack||e)));await load(page,'SimFlation-0.11.2.html');
+  const release=await page.evaluate(()=>({title:document.title,badge:document.querySelector('.edition-badge')?.textContent?.trim(),current:window.__simflationCurrent?{version:window.__simflationCurrent.version,releaseVersion:window.__simflationCurrent.releaseVersion,modelVersion:window.__simflationCurrent.modelVersion}:null}));
+  const settlement=await page.evaluate(()=>window.__sim.runSettlementAudit());assert(settlement.passed,`Settlement self-test failed: ${JSON.stringify(settlement)}`);
+  const runs=[];for(const seed of [42,7,99]){await configure(page,seed,'resolve');runs.push(await page.evaluate(seed=>window.__sim.runLongAudit(1800,seed),seed))}
+  await configure(page,42,'noSupport');const noSupport=await page.evaluate(()=>window.__sim.runLongAudit(1200,42));
+  await configure(page,7,'bailout');const bailout=await page.evaluate(()=>window.__sim.runLongAudit(1200,7));
+  await browser.close();
+  assert(!errors.length,`Browser errors: ${JSON.stringify(errors)}`);assert(release.title==='SimFlation 0.11.2'&&release.badge==='0.11.2'&&release.current?.version==='0.11.2'&&release.current?.modelVersion==='0.11.2',`Release identity mismatch: ${JSON.stringify(release)}`);
+  for(const run of runs)validateCore(run,1800,{failureLimit:20,supportRatioLimit:.08});
+  validateCore(noSupport,1200,{failureLimit:18,supportRatioLimit:0,oneBankLimit:600});assert(noSupport.governmentSupport<=.01,'No-support policy used government solvency support');assert(noSupport.outstandingPublicResolutionEquity<=.01,'No-support policy created public bank equity');assert((noSupport.resolutionRoutes||[]).every(x=>(Number(x.governmentSupport)||0)<=.01&&(Number(x.centralBankBackstop)||0)<=.01&&!/bailout|public resolution|bridge stabilisation|central-bank solvency|system-stability/i.test(String(x.route||''))),`No-support policy produced a forbidden route: ${JSON.stringify((noSupport.resolutionRoutes||[]).filter(x=>(Number(x.governmentSupport)||0)>.01||(Number(x.centralBankBackstop)||0)>.01).slice(0,5))}`);
+  validateCore(bailout,1200,{failureLimit:22,supportRatioLimit:.12});
+  const result={release,settlement,runs:runs.map(compact),noSupport:compact(noSupport),bailout:compact(bailout),errors};console.log('SIMFLATION_0_11_2_AUDIT='+JSON.stringify(result));
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
