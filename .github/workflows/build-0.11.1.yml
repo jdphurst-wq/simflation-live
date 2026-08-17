@@ -6,6 +6,7 @@ on:
     paths:
       - 'scripts/build-0.11.1.mjs'
       - 'scripts/normalise-0.11.1-source.mjs'
+      - 'scripts/fix-0.11.1-accounting.mjs'
       - 'scripts/audit-0.11.1-browser.cjs'
       - 'SimFlation-0.11.0.html'
       - '.github/workflows/build-0.11.1.yml'
@@ -29,6 +30,8 @@ jobs:
         run: node scripts/normalise-0.11.1-source.mjs
       - name: Build 0.11.1
         run: node scripts/build-0.11.1.mjs
+      - name: Apply settlement-aware accounting fixes
+        run: node scripts/fix-0.11.1-accounting.mjs
       - name: Verify generated release identity and banking guards
         run: |
           cmp -s SimFlation-0.11.1.html index.html
@@ -40,6 +43,7 @@ jobs:
           grep -q 'centralBankLiquidityLimit' index.html
           grep -q 'settleBankPayment' index.html
           grep -q 'v0111MonetaryGuard' index.html
+          grep -q 'resolutionRoutes:bankResolutionLedger.slice()' index.html
       - name: Install browser driver
         run: npm install --no-save playwright-core
       - name: Start local simulator server
