@@ -43,6 +43,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run 0.11.2 browser and long-horizon audits
         run: |
+          set -o pipefail
           python3 -m http.server 8000 > /tmp/simflation-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
