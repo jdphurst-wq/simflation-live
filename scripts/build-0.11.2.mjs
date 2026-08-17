@@ -74,12 +74,13 @@ insertAfterFunction('privateCreditRoom',`
     const performing=Math.max(0,bankFirmLoans(bank.id)+bankMortgages(bank.id)-bankNplExposure(bank));
     return Math.max(0,bank.bonds||0)*.82+performing*.18
   }
-  function centralBankLiquidityLimit(bank){
+  function centralBankCollateralLimit(bank){
     if(!bank?.active||bankEquity(bank)<=0)return 0;
     const deposits=Math.max(0,bankDeposits(bank.id)),equity=Math.max(0,bankEquity(bank)),collateral=eligibleCentralBankCollateral(bank);
     return Math.max(0,Math.min(collateral,deposits*.12,equity*.85))
   }
-  function centralBankLiquidityRoom(bank){return Math.max(0,centralBankLiquidityLimit(bank)-Math.max(0,bank?.centralBankBorrowing||0))}
+  function centralBankLiquidityLimit(bank){return Math.max(Math.max(0,bank?.centralBankBorrowing||0),centralBankCollateralLimit(bank))}
+  function centralBankLiquidityRoom(bank){return Math.max(0,centralBankCollateralLimit(bank)-Math.max(0,bank?.centralBankBorrowing||0))}
   function drawCentralBankLiquidity(bank,requested){
     const draw=Math.min(Math.max(0,requested),centralBankLiquidityRoom(bank));
     if(draw>0){bank.centralBankBorrowing=(bank.centralBankBorrowing||0)+draw;bank.reserves=(bank.reserves||0)+draw}
@@ -160,7 +161,7 @@ replaceFunction('loanRate',`function loanRate(bank){
   }`);
 replaceFunction('bankCreditCapacity',`function bankCreditCapacity(bank,riskWeight=1,recipientBankId=null){
     if(!bank?.active||bankEquity(bank)<=0||bankSevereLiquidityDistress(bank)||bank.name.startsWith('Bridge Bank')&&bank.resolutionCooldown>0)return 0;
-    const requirement=Math.max(.04,Number($('capitalRequirement').value)/100),equity=bankEquity(bank),rwa=bankRWA(bank),capitalRoom=Math.max(0,(equity/requirement-rwa)/Math.max(.05,riskWeight)),leverageRoom=Math.max(0,equity*12.5-bankAssets(bank)),growthRoom=Math.max(0,bankOriginationBudget(bank)-Math.max(0,bank.monthOriginations||0));
+    const requirement=Math.max(.04,Number($('capitalRequirement').value)/100),equity=bankEquity(bank),rwa=bankRWA(bank),capitalRoom=Math.max(0,(equity/requirement-rwa)/Math.max(.05,riskWeight)),leverageRoom=Math.max(0,equity*25-bankAssets(bank)),growthRoom=Math.max(0,bankOriginationBudget(bank)-Math.max(0,bank.monthOriginations||0));
     let capacity=Math.min(capitalRoom,leverageRoom,growthRoom,privateCreditRoom());if(recipientBankId!==null&&recipientBankId!==bank.id)capacity=Math.min(capacity,bankSettlementCapacity(bank));return Math.max(0,capacity)
   }`);
 replaceFunction('chooseBank',`function chooseBank(kind='loan'){
@@ -196,7 +197,7 @@ replaceFunction('repayCredit',`function repayCredit(borrower,requested){if(!borr
 replaceFunction('createCredit',`function createCredit(borrower,requested,type='business'){
     let bank=borrower.lenderBankId!==null?bankById(borrower.lenderBankId):null;const recipient=bankById(borrower.bankId),riskWeight=type==='mortgage'?.50:1;
     if(!bank?.active||bank.resolutionCooldown>0||bankCreditCapacity(bank,riskWeight,recipient?.id)<=0)bank=chooseBank('loan');if(!bank)return 0;
-    const gdp=Math.max(1,annualGDPReference()),revenue=Math.max(12000*nominalScale(),borrower.expectedRevenue||0),assetBase=type==='developer'?Math.max(0,propertyAssetValue(borrower)) : Math.max(0,borrower.capitalValue||0),borrowerLimit=type==='developer'?Math.min(gdp*.16,assetBase*.75+gdp*.015):Math.min(gdp*.10,revenue*15+assetBase*.60),concentrationLimit=Math.max(35000*nominalScale(),bankEquity(bank)*(type==='developer'?.25:.20)),room=Math.max(0,Math.min(borrowerLimit,concentrationLimit)-(borrower.debt||0));
+    const gdp=Math.max(1,annualGDPReference()),revenueAnchor=Math.max(12000*nominalScale(),(borrower.expectedRevenue||20000*nominalScale())*15),assetBase=type==='developer'?Math.max(0,propertyAssetValue(borrower)):Math.max(0,borrower.capitalValue||0),borrowerLimit=type==='developer'?Math.min(gdp*.16,Math.max(300000*nominalScale(),assetBase*.75+gdp*.015)):Math.min(gdp*.10,Math.max(300000*nominalScale(),revenueAnchor+assetBase*.60)),concentrationLimit=Math.max(35000*nominalScale(),bankEquity(bank)*(type==='developer'?.25:.20)),room=Math.max(0,Math.min(borrowerLimit,concentrationLimit)-(borrower.debt||0));
     let amount=Math.min(Math.max(0,requested),room,bankCreditCapacity(bank,riskWeight,recipient?.id),privateCreditRoom());if(amount<=0)return 0;if(recipient&&bank.id!==recipient.id)amount=settleBankPayment(bank,recipient,amount);if(amount<=0)return 0;
     borrower.cash=(borrower.cash||0)+amount;borrower.debt=(borrower.debt||0)+amount;borrower.lenderBankId=bank.id;bank.monthOriginations=(bank.monthOriginations||0)+amount;invalidateBankBalanceCache();return amount
   }`);
@@ -343,7 +344,7 @@ const forbiddenLegacy=[
   "route:'one-off central-bank solvency recapitalisation'"
 ];
 for(const marker of forbiddenLegacy)if(html.includes(marker))throw new Error(`Forbidden 0.11.1 banking path remains: ${marker}`);
-const required=['SIMFLATION_0_11_2_RUNTIME_START','eligibleCentralBankCollateral','settleBankPayment','bankNplRatio','v0112RaisePrivateBankCapital','v0112ResolutionCapital','Private credit exceeded binding model limit','window.__simflation0112'];for(const marker of required)if(!html.includes(marker))throw new Error(`Required 0.11.2 marker missing: ${marker}`);
+const required=['SIMFLATION_0_11_2_RUNTIME_START','eligibleCentralBankCollateral','centralBankCollateralLimit','settleBankPayment','bankNplRatio','v0112RaisePrivateBankCapital','v0112ResolutionCapital','Private credit exceeded binding model limit','window.__simflation0112'];for(const marker of required)if(!html.includes(marker))throw new Error(`Required 0.11.2 marker missing: ${marker}`);
 const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(m=>m[1]);for(let i=0;i<scripts.length;i++)new vm.Script(scripts[i],{filename:`SimFlation-0.11.2-inline-${i+1}.js`});
 const version={version:'0.11.2',label:'0.11.2',modelVersion:'0.11.2',standalone:'SimFlation-0.11.2.html',modelStandalone:'SimFlation-0.11.2.html'};
 fs.writeFileSync(outputPath,html);fs.writeFileSync('index.html',html);fs.writeFileSync('version.json',JSON.stringify(version,null,2)+'\n');console.log(`Built ${outputPath}; ${scripts.length} inline scripts parsed successfully.`);
