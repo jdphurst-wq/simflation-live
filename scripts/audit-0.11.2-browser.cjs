@@ -18,9 +18,9 @@ function validateCore(run,months,{failureLimit,supportRatioLimit,oneBankLimit=18
   const browser=await chromium.launch({headless:true});const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(String(e&&e.stack||e)));await load(page,'SimFlation-0.11.2.html');
   const release=await page.evaluate(()=>({title:document.title,badge:document.querySelector('.edition-badge')?.textContent?.trim(),current:window.__simflationCurrent?{version:window.__simflationCurrent.version,releaseVersion:window.__simflationCurrent.releaseVersion,modelVersion:window.__simflationCurrent.modelVersion}:null}));
   const settlement=await page.evaluate(()=>window.__sim.runSettlementAudit());assert(settlement.passed,`Settlement self-test failed: ${JSON.stringify(settlement)}`);
-  const runs=[];for(const seed of [42,7,99]){await configure(page,seed,'resolve');runs.push(await page.evaluate(seed=>window.__sim.runLongAudit(1800,seed),seed))}
-  await configure(page,42,'noSupport');const noSupport=await page.evaluate(()=>window.__sim.runLongAudit(1200,42));
-  await configure(page,7,'bailout');const bailout=await page.evaluate(()=>window.__sim.runLongAudit(1200,7));
+  await page.close();
+  async function runCase(seed,policy,months){const p=await browser.newPage();p.on('pageerror',e=>errors.push(String(e&&e.stack||e)));await load(p,'SimFlation-0.11.2.html');await configure(p,seed,policy);const run=await p.evaluate(({seed,months})=>window.__sim.runLongAudit(months,seed),{seed,months});console.log(`SIMFLATION_0_11_2_CASE=${policy}:${seed}:${run.monthsCompleted}:${run.halted?'halted':'complete'}`);await p.close();return run}
+  const [resolve42,resolve7,resolve99,noSupport,bailout]=await Promise.all([runCase(42,'resolve',1800),runCase(7,'resolve',1800),runCase(99,'resolve',1800),runCase(42,'noSupport',1200),runCase(7,'bailout',1200)]),runs=[resolve42,resolve7,resolve99];
   await browser.close();
   console.log('SIMFLATION_0_11_2_DIAGNOSTIC='+JSON.stringify({runs:runs.map(compact),noSupport:compact(noSupport),bailout:compact(bailout),errors}));
   assert(!errors.length,`Browser errors: ${JSON.stringify(errors)}`);assert(release.title==='SimFlation 0.11.2'&&release.badge==='0.11.2'&&release.current?.version==='0.11.2'&&release.current?.modelVersion==='0.11.2',`Release identity mismatch: ${JSON.stringify(release)}`);
