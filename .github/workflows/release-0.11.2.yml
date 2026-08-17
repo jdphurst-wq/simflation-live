@@ -19,9 +19,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release-gate:
+  audit:
+    name: audit-${{ matrix.audit_case }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        audit_case:
+          - resolve42
+          - resolve7
+          - resolve99
+          - noSupport42
+          - bailout7
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,12 +52,27 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run 0.11.2 browser and long-horizon audits
+        env:
+          SIMFLATION_AUDIT_CASE: ${{ matrix.audit_case }}
         run: |
           set -o pipefail
           python3 -m http.server 8000 > /tmp/simflation-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           node scripts/audit-0.11.2-browser.cjs | tee audit-0.11.2.log
+  publish-candidate:
+    needs: audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build verified release artefacts
+        run: node scripts/build-0.11.2.mjs
       - name: Commit verified release artefacts
         run: |
           git config user.name github-actions[bot]
