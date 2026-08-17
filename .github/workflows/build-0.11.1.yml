@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/build-0.11.1.mjs'
+      - 'scripts/normalise-0.11.1-source.mjs'
       - 'scripts/audit-0.11.1-browser.cjs'
       - 'SimFlation-0.11.0.html'
       - '.github/workflows/build-0.11.1.yml'
@@ -24,6 +25,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Normalise 0.11.0 source functions
+        run: node scripts/normalise-0.11.1-source.mjs
       - name: Build 0.11.1
         run: node scripts/build-0.11.1.mjs
       - name: Verify generated release identity and banking guards
@@ -45,6 +48,7 @@ jobs:
         run: node scripts/audit-0.11.1-browser.cjs
       - name: Commit audited 0.11.1 release if generated files changed
         run: |
+          git checkout -- SimFlation-0.11.0.html
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add SimFlation-0.11.1.html index.html version.json
