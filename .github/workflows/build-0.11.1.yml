@@ -1,0 +1,56 @@
+name: Build and audit SimFlation 0.11.1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-0.11.1.mjs'
+      - 'scripts/audit-0.11.1-browser.cjs'
+      - 'SimFlation-0.11.0.html'
+      - '.github/workflows/build-0.11.1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-audit-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build 0.11.1
+        run: node scripts/build-0.11.1.mjs
+      - name: Verify generated release identity and banking guards
+        run: |
+          cmp -s SimFlation-0.11.1.html index.html
+          grep -q '"version": "0.11.1"' version.json
+          grep -q '"modelVersion": "0.11.1"' version.json
+          grep -q '<title>SimFlation 0.11.1</title>' index.html
+          grep -q 'edition-badge">0.11.1<' index.html
+          grep -q 'SIMFLATION_0_11_1_RUNTIME_START' index.html
+          grep -q 'centralBankLiquidityLimit' index.html
+          grep -q 'settleBankPayment' index.html
+          grep -q 'v0111MonetaryGuard' index.html
+      - name: Install browser driver
+        run: npm install --no-save playwright-core
+      - name: Start local simulator server
+        run: python3 -m http.server 8000 >/tmp/simflation-http.log 2>&1 &
+      - name: Run 150-year multi-seed and no-support banking audits
+        run: node scripts/audit-0.11.1-browser.cjs
+      - name: Commit audited 0.11.1 release if generated files changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add SimFlation-0.11.1.html index.html version.json
+          if git diff --cached --quiet; then
+            echo "Generated release already current."
+            exit 0
+          fi
+          git commit -m "Release SimFlation 0.11.1"
+          git push
